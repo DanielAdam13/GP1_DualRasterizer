@@ -20,7 +20,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pWindow(pWindow),
 	m_CurrentSamplerType{ SamplerType::Point },
 	m_RotationFrozen{ false },
-	m_CurrentRasterizerState{ RasterizerState::Hardware }
+	m_CurrentRasterizerState{ RasterizerState::Hardware },
+	m_ShowFireMesh{ m_CurrentRasterizerState == RasterizerState::Hardware }
 {
 	//Initialize
 	SDL_GetWindowSize(pWindow, &m_Width, &m_Height);
@@ -126,14 +127,14 @@ void Renderer::Update(const Timer* pTimer)
 	// Draw Opaque Meshes first
 	for (auto& pMesh : m_OpaqueMeshes)
 	{
-		pMesh->Render(m_pDeviceContext, viewProjMatrix, m_CurrentSamplerType, m_Camera.origin);
+		pMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSamplerType);
 	}
 	// Draw Transparent Meshes AFTER
-	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	if (m_CurrentRasterizerState == RasterizerState::Hardware && m_ShowFireMesh)
 	{
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
-			pTrMesh->Render(m_pDeviceContext, viewProjMatrix, m_CurrentSamplerType, m_Camera.origin);
+			pTrMesh->Render(RasterizerState::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSamplerType);
 		}
 	}
 
@@ -286,7 +287,6 @@ void dae::Renderer::ProcessInput()
 		m_CurrentRasterizerState = static_cast<RasterizerState>((static_cast<int>(m_CurrentRasterizerState) + 1) % 2);
 		std::wcout << "RASTERIZER STATE: " << std::to_wstring(static_cast<int>(m_CurrentRasterizerState)) << "\n";
 	}
-
 	wasF1Pressed = isF1Pressed;
 
 	// ROTATION
@@ -297,20 +297,35 @@ void dae::Renderer::ProcessInput()
 	{
 		m_RotationFrozen = !m_RotationFrozen;
 	}
-
 	wasF2Pressed = isF2Pressed;
 
-	// Sampler State
-	static bool wasF4Pressed{ false };
-	bool isF4Pressed = pKeyboardState[SDL_SCANCODE_F4];
-
-	if (wasF4Pressed && !isF4Pressed)
+	// ------ HARDWARE ONLY ------
+	if (m_CurrentRasterizerState == RasterizerState::Hardware)
 	{
-		m_CurrentSamplerType = static_cast<SamplerType>((static_cast<int>(m_CurrentSamplerType) + 1) % 3);
-		std::wcout << "Sampler State: " << std::to_wstring(static_cast<int>(m_CurrentSamplerType)) << "\n";
+		// Toggle FireFX Mesh
+		static bool wasF3Pressed{ false };
+		bool isF3Pressed = pKeyboardState[SDL_SCANCODE_F3];
+
+		if (wasF3Pressed && !isF3Pressed)
+		{
+			m_ShowFireMesh = !m_ShowFireMesh;
+		}
+		wasF3Pressed = isF3Pressed;
+
+		// Sampler State
+		static bool wasF4Pressed{ false };
+		bool isF4Pressed = pKeyboardState[SDL_SCANCODE_F4];
+
+		if (wasF4Pressed && !isF4Pressed)
+		{
+			m_CurrentSamplerType = static_cast<SamplerType>((static_cast<int>(m_CurrentSamplerType) + 1) % 3);
+			std::wcout << "Sampler State: " << std::to_wstring(static_cast<int>(m_CurrentSamplerType)) << "\n";
+		}
+		wasF4Pressed = isF4Pressed;
 	}
-
-	wasF4Pressed = isF4Pressed;
-
+	else // ------ SOFTWARE ONLY ------
+	{
+		
+	}
 	
 }

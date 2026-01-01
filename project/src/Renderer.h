@@ -65,7 +65,9 @@ namespace dae
 
 		// CONDITIONS
 		bool m_RotationFrozen;
-		
+
 		RasterizerState m_CurrentRasterizerState;
+
+		bool m_ShowFireMesh;
 	};
 }

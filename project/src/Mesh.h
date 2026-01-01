@@ -116,81 +116,85 @@ public:
 		SAFE_RELEASE(m_pAnisotropicSampler);
 	}
 
-	void Render(ID3D11DeviceContext* pDeviceContext, const Matrix& viewProjMatrix, SamplerType samplerType, Vector3& cameraPos)
+	void Render(RasterizerState currentRasterizerState, const Matrix& viewProjMatrix, Vector3& cameraPos, ID3D11DeviceContext* pDeviceContext, SamplerType samplerType)
 	{
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 		Matrix worldViewProjectionMatrix{ m_WorldMatrix * viewProjMatrix };
-		m_pEffect->GetWorldViewProjMatrix()->SetMatrix(reinterpret_cast<float*>(&worldViewProjectionMatrix));
 
-		// Bind Texture's SRV to GPU's resource view
-		m_pEffect->SetDiffuseMap(m_pDiffuseTetxure.get());
-
-		if (m_pNormalTexture)
-			m_pEffect->SetNormalMap(m_pNormalTexture.get());
-		
-		if (m_pSpecularTexture)
-			m_pEffect->SetSpecularMap(m_pSpecularTexture.get());
-
-		if (m_pGlossTexture)
-			m_pEffect->SetGlossMap(m_pGlossTexture.get());
-
-		// Set Primitive Topology
-		if (m_CurrentTopology == PrimitiveTopology::TriangleList)
+		if (currentRasterizerState == RasterizerState::Hardware)
 		{
-			pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			m_pEffect->GetWorldViewProjMatrix()->SetMatrix(reinterpret_cast<float*>(&worldViewProjectionMatrix));
+
+			// Bind Texture's SRV to GPU's resource view
+			m_pEffect->SetDiffuseMap(m_pDiffuseTetxure.get());
+
+			if (m_pNormalTexture)
+				m_pEffect->SetNormalMap(m_pNormalTexture.get());
+
+			if (m_pSpecularTexture)
+				m_pEffect->SetSpecularMap(m_pSpecularTexture.get());
+
+			if (m_pGlossTexture)
+				m_pEffect->SetGlossMap(m_pGlossTexture.get());
+
+			// Set Primitive Topology
+			if (m_CurrentTopology == PrimitiveTopology::TriangleList)
+			{
+				pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			}
+			else
+			{
+				pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+			}
+
+			// Set Input Layout
+			pDeviceContext->IASetInputLayout(m_pInputLayout);
+
+			// Set Vertex Buffer
+			constexpr UINT stride{ sizeof(VertexIn) };
+			constexpr UINT offset{ 0 };
+			pDeviceContext->IASetVertexBuffers(0, 1, &m_pVertexBuffer, &stride, &offset);
+
+			// Set Index Buffer
+			pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+
+			switch (samplerType)
+			{
+			case SamplerType::Point:
+				m_CurrentSampler = m_pPointSampler;
+				break;
+			case SamplerType::Linear:
+				m_CurrentSampler = m_pLinearSampler;
+				break;
+			case SamplerType::Anisotropic:
+				m_CurrentSampler = m_pAnisotropicSampler;
+				break;
+			}
+
+			// ----- Apply Technique Pass -----
+			D3DX11_TECHNIQUE_DESC techDesc{};
+			m_pEffect->GetTechnique()->GetDesc(&techDesc);
+
+			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(0); // Technique has only one pass
+			pass->Apply(0, pDeviceContext);
+
+			// ----- Bind Variables AFTER Technique pass ------
+			pDeviceContext->PSSetSamplers(0, 1, &m_CurrentSampler);
+
+			//m_pEffect->ApplyPipelineStates(pDeviceContext);
+
+			const auto effectWorldMatrix{ m_pEffect->GetWorldMatrix() };
+			const auto effectCameraPosVector{ m_pEffect->GetCameraPos() };
+
+			if (effectWorldMatrix)
+				effectWorldMatrix->SetMatrix(reinterpret_cast<float*>(&m_WorldMatrix));
+
+			if (effectCameraPosVector)
+				effectCameraPosVector->SetFloatVector(reinterpret_cast<float*>(&cameraPos));
+
+			// ----- DRAW -----
+			pDeviceContext->DrawIndexed(m_NumIndices, 0, 0);
 		}
-		else
-		{
-			pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		}
-
-		// Set Input Layout
-		pDeviceContext->IASetInputLayout(m_pInputLayout);
-
-		// Set Vertex Buffer
-		constexpr UINT stride{ sizeof(VertexIn) };
-		constexpr UINT offset{ 0 };
-		pDeviceContext->IASetVertexBuffers(0, 1, &m_pVertexBuffer, &stride, &offset);
-
-		// Set Index Buffer
-		pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-
-		switch (samplerType)
-		{
-		case SamplerType::Point:
-			m_CurrentSampler = m_pPointSampler;
-			break;
-		case SamplerType::Linear:
-			m_CurrentSampler = m_pLinearSampler;
-			break;
-		case SamplerType::Anisotropic:
-			m_CurrentSampler = m_pAnisotropicSampler;
-			break;
-		}
-
-		// ----- Apply Technique Pass -----
-		D3DX11_TECHNIQUE_DESC techDesc{};
-		m_pEffect->GetTechnique()->GetDesc(&techDesc);
-
-		ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(0); // Technique has only one pass
-		pass->Apply(0, pDeviceContext);
-
-		// ----- Bind Variables AFTER Technique pass ------
-		pDeviceContext->PSSetSamplers(0, 1, &m_CurrentSampler);
-
-		//m_pEffect->ApplyPipelineStates(pDeviceContext);
-
-		const auto effectWorldMatrix{ m_pEffect->GetWorldMatrix() };
-		const auto effectCameraPosVector{ m_pEffect->GetCameraPos() };
-
-		if (effectWorldMatrix)
-			effectWorldMatrix->SetMatrix(reinterpret_cast<float*>(&m_WorldMatrix));
-
-		if (effectCameraPosVector)
-			effectCameraPosVector->SetFloatVector(reinterpret_cast<float*>(&cameraPos));
-
-		// ----- DRAW -----
-		pDeviceContext->DrawIndexed(m_NumIndices, 0, 0);
 	};
 
 	void Translate(const Vector3& offset)
@@ -323,7 +327,6 @@ private:
 		m_pAnisotropicSampler = nullptr;
 		pDevice->CreateSamplerState(&desc, &m_pAnisotropicSampler);
 	}
-	//std::unique_ptr<Effect> CreateEffect(Effect::EffectType effecttype, ID3D11Device* pDevice);
 
 	// Direct X Resources
 	ID3D11InputLayout* m_pInputLayout{};
