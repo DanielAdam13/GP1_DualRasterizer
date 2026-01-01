@@ -69,5 +69,7 @@ namespace dae
 		RasterizerState m_CurrentRasterizerState;
 
 		bool m_ShowFireMesh;
+
+		bool m_UniformClearColorActive;
 	};
 }

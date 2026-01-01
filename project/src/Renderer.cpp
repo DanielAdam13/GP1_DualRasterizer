@@ -21,7 +21,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_CurrentSamplerType{ SamplerType::Point },
 	m_RotationFrozen{ false },
 	m_CurrentRasterizerState{ RasterizerState::Hardware },
-	m_ShowFireMesh{ m_CurrentRasterizerState == RasterizerState::Hardware }
+	m_ShowFireMesh{ m_CurrentRasterizerState == RasterizerState::Hardware },
+	m_UniformClearColorActive{ false }
 {
 	//Initialize
 	SDL_GetWindowSize(pWindow, &m_Width, &m_Height);
@@ -94,6 +95,7 @@ Renderer::~Renderer()
 
 void Renderer::Update(const Timer* pTimer)
 {
+	const float aspectRatio{ static_cast<float>(m_Width) / static_cast<float>(m_Height) };
 	ProcessInput();
 
 	if (!m_RotationFrozen)
@@ -112,13 +114,35 @@ void Renderer::Update(const Timer* pTimer)
 
 	// Clear Views at the start of each Frame
 	constexpr float hardwareColor[4] = { 0.39f, 0.59f, 0.93f, 1.f };
-	constexpr float softwareColor[4] = { 0.39f, 0.39f, 0.39f, 1.f };
-	const float* currentColor{(m_CurrentRasterizerState == RasterizerState::Hardware) ? hardwareColor : softwareColor};
+	constexpr UINT8 softwareColor[3] = { UINT8(0.39f * 255), UINT8(0.39f * 255), UINT8(0.39f * 255) };
+	constexpr float uniformHardwareClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.f };
+	constexpr UINT8 uniformSoftwareClearColor[3] = { UINT8(0.1f * 255), UINT8(0.1f * 255), UINT8(0.1f * 255) };
 
-	m_pDeviceContext->ClearRenderTargetView(m_pRenderTargetView, currentColor);
-	m_pDeviceContext->ClearDepthStencilView(m_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
-	
-	const float aspectRatio{ static_cast<float>(m_Width) / static_cast<float>(m_Height) };
+	// Clear background color
+	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	{
+		const float* currentHardwareBackgroundColor{ m_UniformClearColorActive ? uniformHardwareClearColor : hardwareColor };
+		m_pDeviceContext->ClearRenderTargetView(m_pRenderTargetView, currentHardwareBackgroundColor);
+		m_pDeviceContext->ClearDepthStencilView(m_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
+	}
+	else
+	{
+		const UINT8* currentSoftwareBackgroundColor{ m_UniformClearColorActive ? uniformSoftwareClearColor : softwareColor };
+		// START SDL
+		//SDL_LockSurface(m_pBackBuffer);
+
+		//std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max());
+
+		//// CLEAR THE BUFFER
+		//SDL_FillRect(
+		//	m_pBackBuffer,
+		//	nullptr, // null fills the whole surface
+		//	SDL_MapRGB(m_pBackBuffer->format, 
+		//		currentSoftwareBackgroundColor[0], 
+		//		currentSoftwareBackgroundColor[1], 
+		//		currentSoftwareBackgroundColor[2]) // Background color
+		//);
+	}
 
 	m_Camera.Update(pTimer, aspectRatio);
 	Matrix viewProjMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
@@ -139,7 +163,18 @@ void Renderer::Update(const Timer* pTimer)
 	}
 
 	// Present BackBuffer (SWAP)
-	m_pSwapChain->Present(0, 0);
+	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	{
+		m_pSwapChain->Present(0, 0);
+	}
+	else
+	{
+		// Update SDL Surface
+		/*SDL_UnlockSurface(m_pBackBuffer);
+		SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
+		SDL_UpdateWindowSurface(m_pWindow);*/
+	}
+
 }
 
 
@@ -298,6 +333,16 @@ void dae::Renderer::ProcessInput()
 		m_RotationFrozen = !m_RotationFrozen;
 	}
 	wasF2Pressed = isF2Pressed;
+
+	// Uniform Clear Color
+	static bool wasF10Pressed{ false };
+	bool isF10Pressed = pKeyboardState[SDL_SCANCODE_F10];
+
+	if (wasF10Pressed && !isF10Pressed)
+	{
+		m_UniformClearColorActive = !m_UniformClearColorActive;
+	}
+	wasF10Pressed = isF10Pressed;
 
 	// ------ HARDWARE ONLY ------
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
