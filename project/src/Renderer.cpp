@@ -112,22 +112,23 @@ void Renderer::Update(const Timer* pTimer)
 		}
 	}
 
-	// Clear Views at the start of each Frame
-	constexpr float hardwareColor[4] = { 0.39f, 0.59f, 0.93f, 1.f };
-	constexpr UINT8 softwareColor[3] = { UINT8(0.39f * 255), UINT8(0.39f * 255), UINT8(0.39f * 255) };
-	constexpr float uniformHardwareClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.f };
-	constexpr UINT8 uniformSoftwareClearColor[3] = { UINT8(0.1f * 255), UINT8(0.1f * 255), UINT8(0.1f * 255) };
-
-	// Clear background color
+	// ------- START OF FRAME --------
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
 	{
+		constexpr float hardwareColor[4] = { 0.39f, 0.59f, 0.93f, 1.f };
+		constexpr float uniformHardwareClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.f };
 		const float* currentHardwareBackgroundColor{ m_UniformClearColorActive ? uniformHardwareClearColor : hardwareColor };
+
+		// Clear Views at the start of each Frame
 		m_pDeviceContext->ClearRenderTargetView(m_pRenderTargetView, currentHardwareBackgroundColor);
 		m_pDeviceContext->ClearDepthStencilView(m_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
 	}
 	else
 	{
+		constexpr UINT8 softwareColor[3] = { UINT8(0.39f * 255), UINT8(0.39f * 255), UINT8(0.39f * 255) };
+		constexpr UINT8 uniformSoftwareClearColor[3] = { UINT8(0.1f * 255), UINT8(0.1f * 255), UINT8(0.1f * 255) };
 		const UINT8* currentSoftwareBackgroundColor{ m_UniformClearColorActive ? uniformSoftwareClearColor : softwareColor };
+
 		// START SDL
 		//SDL_LockSurface(m_pBackBuffer);
 
@@ -162,9 +163,10 @@ void Renderer::Update(const Timer* pTimer)
 		}
 	}
 
-	// Present BackBuffer (SWAP)
+	// -------- END OF FRAME --------
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
 	{
+		// Present BackBuffer (SWAP)
 		m_pSwapChain->Present(0, 0);
 	}
 	else
