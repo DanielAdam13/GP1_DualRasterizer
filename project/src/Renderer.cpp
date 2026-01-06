@@ -103,12 +103,12 @@ void Renderer::Update(const Timer* pTimer)
 		const float rotationSpeed{ PI_DIV_4 * pTimer->GetElapsed() };
 		for (auto& pOpaqMesh : m_OpaqueMeshes)
 		{
-			pOpaqMesh->RotateY(rotationSpeed);
+			//pOpaqMesh->RotateY(rotationSpeed);
 		}
 
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
-			pTrMesh->RotateY(rotationSpeed);
+			//pTrMesh->RotateY(rotationSpeed);
 		}
 	}
 

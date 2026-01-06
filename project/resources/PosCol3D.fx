@@ -16,6 +16,7 @@ struct VS_OUTPUT
     float2 UV : TEXCOORD;
     float3 Normal : NORMAL;
     float3 Tangent : TANGENT;
+    float3 ViewDir : VIEWDIRECTION;
 };
 
 // -------------------------
@@ -47,7 +48,7 @@ struct LIGHT
     float3 LightDirection : LightDir;
     float LightIntensity : Intensity;
 };
-static const LIGHT gLight1 = { normalize(float3(0.577f, -0.577f, 0.577f)), 7.f };
+static const LIGHT gLight1 = { normalize(float3(0.577f, -0.577f, 0.577f)), 1.f };
 
 const float PI = 3.14159f;
 
@@ -64,6 +65,7 @@ VS_OUTPUT VS(VS_INPUT input)
     output.UV = input.UV;
     output.Normal = mul(normalize(input.Normal), (float3x3) gWorldMatrix).xyz; // Transformed Normal to World
     output.Tangent = mul(normalize(input.Tangent), (float3x3) gWorldMatrix).xyz; // Transformed Tangent to World
+    output.ViewDir = gCameraPos - output.WorldPos.xyz;
     
     return output;
 }
@@ -73,7 +75,7 @@ float3 GetLambertColor(in VS_OUTPUT input, float3 N, float3 lightDir)
 {
     const float cosTheta = saturate(dot(N, lightDir));
     const float3 albedo = gDiffuseMap.Sample(gSampler, input.UV).rgb;
-    const float diffuseReflectance = 1.f;
+    const float diffuseReflectance = 7.f;
     
     const float3 LambertColor = (albedo * diffuseReflectance / PI) * cosTheta * gLight1.LightIntensity;
     
@@ -92,16 +94,19 @@ float3 GetPhongColor(in VS_OUTPUT input, float3 N, float3 lightVector)
     const float3 sampledSpecular = gSpecularMap.Sample(gSampler, input.UV).rgb;
     const float sampledGlossR = gGlossinessMap.Sample(gSampler, input.UV).r;
     
-    const float shininess = 25.f;
+    const float shininess = 25.f / gLight1.LightIntensity;
     const float phongExponent = sampledGlossR * shininess;
     
-    const float3 viewDirection = normalize(gCameraPos - input.WorldPos.xyz);
+    //const float3 viewDirection = normalize(gCameraPos - input.WorldPos.xyz);
+    const float3 viewDirection = normalize(input.ViewDir);
     
     const float3 reflectRay = reflect(-lightVector, N);
     const float cosA = saturate(dot(reflectRay, viewDirection));
     const float expCosA = pow(cosA, phongExponent);
     
-    const float3 SpecularColor = sampledSpecular.r * sampledSpecular * expCosA * gLight1.LightIntensity;
+    const float reflectance = sampledSpecular.r;
+    
+    const float3 SpecularColor = sampledSpecular * reflectance * expCosA * gLight1.LightIntensity;
     
     return SpecularColor;
 }
@@ -128,8 +133,9 @@ float4 PS(VS_OUTPUT input) : SV_Target
     
     const float3 LambertColor = GetLambertColor(input, worldNormal, lightDir);
     const float3 PhongColor = GetPhongColor(input, worldNormal, lightDir);
+    const float3 AmbientColor = float3(0.025f, 0.025f, 0.025f);
 
-    return float4(LambertColor + PhongColor, 1.f);
+    return float4(LambertColor + PhongColor + AmbientColor, 1.f);
 }
 
 // -------------------------
