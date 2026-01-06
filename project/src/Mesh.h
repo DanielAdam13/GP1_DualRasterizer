@@ -5,9 +5,8 @@
 #include <d3dcompiler.h>
 #include <d3dx11effect.h>
 
-#include "DataStructs.h"
+#include "Math.h" // Includes dae structs + DataStructs
 #include <vector>
-#include "Matrix.h"
 
 #include "Effect.h"
 #include "ShadingEffect.h"
@@ -63,21 +62,18 @@ public:
 		m_TranslationMatrix{ Matrix::CreateTranslation(m_Position) },
 		m_RotationMatrix{ Matrix::CreateRotationY(m_RotY) },
 		m_ScaleMatrix{ Matrix::CreateScale(m_Scale) },
-		m_pDiffuseTetxure{},
-		m_pNormalTexture{},
-		m_pSpecularTexture{},
-		m_pGlossTexture{}
+		m_pDiffuseTetxure{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
+		m_pNormalTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath)) },
+		m_pSpecularTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath)) },
+		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) },
+		m_CurrentSampler{ m_pPointSampler }
 		{
 			Utils::ParseOBJ(mainBodyMeshOBJ, m_Vertices, m_Indices);
 			m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 			CreateLayouts(pDevice);
 			CreateSamplerStates(pDevice);
-			m_CurrentSampler = m_pPointSampler;
-			m_pDiffuseTetxure = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath));
-			m_pNormalTexture = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath));
-			m_pSpecularTexture = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath));
-			m_pGlossTexture = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath));
 		};
+
 	Mesh(ID3D11Device* pDevice, const std::vector<VertexIn>& vertices, const std::vector<uint32_t>& indices, PrimitiveTopology _primitive,
 		const std::string& diffuseTexturePath, const std::string& normalTexturePath = "", const std::string& specularTexturePath = "", const std::string& glossTexturePath = "")
 		: m_pEffect{ std::make_unique<EffectType>(pDevice) },
@@ -91,19 +87,15 @@ public:
 		m_TranslationMatrix{ Matrix::CreateTranslation(m_Position) },
 		m_RotationMatrix{ Matrix::CreateRotationY(m_RotY) },
 		m_ScaleMatrix{ Matrix::CreateScale(m_Scale) },
-		m_pDiffuseTetxure{},
-		m_pNormalTexture{},
-		m_pSpecularTexture{},
-		m_pGlossTexture{}
+		m_pDiffuseTetxure{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
+		m_pNormalTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath)) },
+		m_pSpecularTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath)) },
+		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) },
+		m_CurrentSampler{ m_pPointSampler }
 	{
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 		CreateLayouts(pDevice);
 		CreateSamplerStates(pDevice);
-		m_CurrentSampler = m_pPointSampler;
-		m_pDiffuseTetxure = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath));
-		m_pNormalTexture = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath));
-		m_pSpecularTexture = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath));
-		m_pGlossTexture = std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath));
 	};
 	~Mesh()
 	{
@@ -214,13 +206,18 @@ public:
 		m_ScaleMatrix = Matrix::CreateScale(scale);
 	};
 
+	Matrix GetWorldMatrix() const
+	{
+		return m_WorldMatrix;
+	};
+
 private:
 	// Mesh Members
 	std::unique_ptr<EffectType> m_pEffect;
 	std::vector<VertexIn> m_Vertices;
 	std::vector<uint32_t> m_Indices;
 
-	PrimitiveTopology m_CurrentTopology;
+	const PrimitiveTopology m_CurrentTopology;
 
 	Vector3 m_Position;
 	float m_RotY;
@@ -231,10 +228,10 @@ private:
 	Matrix m_RotationMatrix;
 	Matrix m_ScaleMatrix;
 
-	std::unique_ptr<Texture> m_pDiffuseTetxure;
-	std::unique_ptr<Texture> m_pNormalTexture;
-	std::unique_ptr<Texture> m_pSpecularTexture;
-	std::unique_ptr<Texture> m_pGlossTexture;
+	const std::unique_ptr<Texture> m_pDiffuseTetxure;
+	const std::unique_ptr<Texture> m_pNormalTexture;
+	const std::unique_ptr<Texture> m_pSpecularTexture;
+	const std::unique_ptr<Texture> m_pGlossTexture;
 
 	void CreateLayouts(ID3D11Device* pDevice)
 	{

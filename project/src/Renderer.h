@@ -13,7 +13,7 @@
 #include "Timer.h"
 
 #include <vector>
-#include "Mesh.h"
+#include "Mesh.h" // Includes Mesh + dae structs + DataStructs
 #include "Camera.h"
 
 namespace dae
@@ -49,6 +49,9 @@ namespace dae
 		uint32_t* m_pBackBufferPixels{};
 
 		float* m_pDepthBufferPixels{};
+
+		void RenderSoftwareMesh();
+		void VertexTransformationFunction();
 
 		// --- HARDWARE ---
 		bool m_IsDXInitialized{ false };

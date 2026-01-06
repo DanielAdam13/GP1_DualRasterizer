@@ -51,7 +51,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, 0.1f, 100.f);
 
-	// Initial Mesh states don't matter if software or rasterizer
+	// Initial Mesh costructor doesn't care about Software or Hardware states
 	m_OpaqueMeshes.reserve(2);
 	m_OpaqueMeshes.emplace_back(std::make_unique<Mesh<ShadingEffect>>(
 		m_pDevice,
@@ -78,9 +78,10 @@ Renderer::~Renderer()
 	SDL_DestroyWindow(m_pWindow);
 	m_pWindow = nullptr;
 
-	// SOFTWARE
+	// --- SOFTWARE ---
 	delete[] m_pDepthBufferPixels;
 
+	// --- HARDWARE ---
 	// 1. Unbind Render Target view and Depth Stencil view from Device Context
 	if (m_pDeviceContext)
 	{
@@ -167,6 +168,11 @@ void Renderer::Update(const Timer* pTimer)
 	for (auto& pMesh : m_OpaqueMeshes)
 	{
 		pMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSamplerType);
+
+		if (m_CurrentRasterizerState == RasterizerState::Software)
+		{
+			RenderSoftwareMesh();
+		}
 	}
 	// Draw Transparent Meshes AFTER
 	if (m_CurrentRasterizerState == RasterizerState::Hardware && m_ShowFireMesh)
@@ -193,11 +199,20 @@ void Renderer::Update(const Timer* pTimer)
 
 }
 
-
 void Renderer::Render() const
 {
 	if (!m_IsDXInitialized)
 		return;
+}
+
+void dae::Renderer::RenderSoftwareMesh()
+{
+
+}
+
+void dae::Renderer::VertexTransformationFunction()
+{
+
 }
 
 HRESULT Renderer::InitializeDirectX()
@@ -329,6 +344,8 @@ void dae::Renderer::ProcessInput()
 {
 	const uint8_t* pKeyboardState{ SDL_GetKeyboardState(nullptr) };
 
+	// --- SHARED ---
+	// 
 	// RASTERIZER STATE
 	static bool wasF1Pressed{ false };
 	bool isF1Pressed = pKeyboardState[SDL_SCANCODE_F1];
@@ -360,7 +377,7 @@ void dae::Renderer::ProcessInput()
 	}
 	wasF10Pressed = isF10Pressed;
 
-	// ------ HARDWARE ONLY ------
+	// ------ HARDWARE ------
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
 	{
 		// Toggle FireFX Mesh
