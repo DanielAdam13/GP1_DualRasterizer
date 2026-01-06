@@ -118,9 +118,11 @@ public:
 
 	void Render(RasterizerState currentRasterizerState, const Matrix& viewProjMatrix, Vector3& cameraPos, ID3D11DeviceContext* pDeviceContext, SamplerType samplerType)
 	{
+		// SHARED
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 		Matrix worldViewProjectionMatrix{ m_WorldMatrix * viewProjMatrix };
 
+		// HARDWARE
 		if (currentRasterizerState == RasterizerState::Hardware)
 		{
 			m_pEffect->GetWorldViewProjMatrix()->SetMatrix(reinterpret_cast<float*>(&worldViewProjectionMatrix));

@@ -24,14 +24,23 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_ShowFireMesh{ m_CurrentRasterizerState == RasterizerState::Hardware },
 	m_UniformClearColorActive{ false }
 {
-	//Initialize
+	// Initialize
 	SDL_GetWindowSize(pWindow, &m_Width, &m_Height);
 
-	//Initialize DirectX pipeline
+	// --- SOFTWARE ---
+	// Create Buffers
+	m_pFrontBuffer = SDL_GetWindowSurface(pWindow);
+	m_pBackBuffer = SDL_CreateRGBSurface(0, m_Width, m_Height, 32, 0, 0, 0, 0);
+	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;
+
+	m_pDepthBufferPixels = new float[m_Width * m_Height];
+	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max()); // depth buffer elements are initalized with max of float
+
+	// Initialize DirectX pipeline
 	const HRESULT result = InitializeDirectX();
 	if (result == S_OK)
 	{
-		m_IsInitialized = true;
+		m_IsDXInitialized = true;
 		std::cout << "DirectX is initialized and ready!\n";
 	}
 	else
@@ -39,9 +48,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		std::cout << "DirectX initialization failed!\n";
 	}
 
+
 	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, 0.1f, 100.f);
 
-
+	// Initial Mesh states don't matter if software or rasterizer
 	m_OpaqueMeshes.reserve(2);
 	m_OpaqueMeshes.emplace_back(std::make_unique<Mesh<ShadingEffect>>(
 		m_pDevice,
@@ -67,6 +77,9 @@ Renderer::~Renderer()
 {
 	SDL_DestroyWindow(m_pWindow);
 	m_pWindow = nullptr;
+
+	// SOFTWARE
+	delete[] m_pDepthBufferPixels;
 
 	// 1. Unbind Render Target view and Depth Stencil view from Device Context
 	if (m_pDeviceContext)
@@ -95,6 +108,7 @@ Renderer::~Renderer()
 
 void Renderer::Update(const Timer* pTimer)
 {
+	// SHARED
 	const float aspectRatio{ static_cast<float>(m_Width) / static_cast<float>(m_Height) };
 	ProcessInput();
 
@@ -103,12 +117,12 @@ void Renderer::Update(const Timer* pTimer)
 		const float rotationSpeed{ PI_DIV_4 * pTimer->GetElapsed() };
 		for (auto& pOpaqMesh : m_OpaqueMeshes)
 		{
-			//pOpaqMesh->RotateY(rotationSpeed);
+			pOpaqMesh->RotateY(rotationSpeed);
 		}
 
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
-			//pTrMesh->RotateY(rotationSpeed);
+			pTrMesh->RotateY(rotationSpeed);
 		}
 	}
 
@@ -130,19 +144,19 @@ void Renderer::Update(const Timer* pTimer)
 		const UINT8* currentSoftwareBackgroundColor{ m_UniformClearColorActive ? uniformSoftwareClearColor : softwareColor };
 
 		// START SDL
-		//SDL_LockSurface(m_pBackBuffer);
+		SDL_LockSurface(m_pBackBuffer);
 
-		//std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max());
+		std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max());
 
-		//// CLEAR THE BUFFER
-		//SDL_FillRect(
-		//	m_pBackBuffer,
-		//	nullptr, // null fills the whole surface
-		//	SDL_MapRGB(m_pBackBuffer->format, 
-		//		currentSoftwareBackgroundColor[0], 
-		//		currentSoftwareBackgroundColor[1], 
-		//		currentSoftwareBackgroundColor[2]) // Background color
-		//);
+		// CLEAR THE BUFFER
+		SDL_FillRect(
+			m_pBackBuffer,
+			nullptr, // null fills the whole surface
+			SDL_MapRGB(m_pBackBuffer->format, 
+				currentSoftwareBackgroundColor[0], 
+				currentSoftwareBackgroundColor[1], 
+				currentSoftwareBackgroundColor[2]) // Background color
+		);
 	}
 
 	m_Camera.Update(pTimer, aspectRatio);
@@ -172,9 +186,9 @@ void Renderer::Update(const Timer* pTimer)
 	else
 	{
 		// Update SDL Surface
-		/*SDL_UnlockSurface(m_pBackBuffer);
+		SDL_UnlockSurface(m_pBackBuffer);
 		SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
-		SDL_UpdateWindowSurface(m_pWindow);*/
+		SDL_UpdateWindowSurface(m_pWindow);
 	}
 
 }
@@ -182,7 +196,7 @@ void Renderer::Update(const Timer* pTimer)
 
 void Renderer::Render() const
 {
-	if (!m_IsInitialized)
+	if (!m_IsDXInitialized)
 		return;
 }
 

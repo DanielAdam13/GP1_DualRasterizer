@@ -38,12 +38,20 @@ namespace dae
 		int m_Width{};
 		int m_Height{};
 
-		bool m_IsInitialized{ false };
-
 		Camera m_Camera{};
 		std::vector<std::unique_ptr<Mesh<ShadingEffect>>> m_OpaqueMeshes{};
 		std::vector<std::unique_ptr<Mesh<TransparencyEffect>>> m_TransparentMeshes{};
 		SamplerType m_CurrentSamplerType;
+
+		// --- SOFTWARE ---
+		SDL_Surface* m_pFrontBuffer{ nullptr };
+		SDL_Surface* m_pBackBuffer{ nullptr };
+		uint32_t* m_pBackBufferPixels{};
+
+		float* m_pDepthBufferPixels{};
+
+		// --- HARDWARE ---
+		bool m_IsDXInitialized{ false };
 
 		std::unique_ptr<ShadingEffect> m_pOpaqueEffect;
 		std::unique_ptr<TransparencyEffect> m_pTransparencyEffect;
