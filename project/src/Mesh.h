@@ -17,6 +17,8 @@
 #include <memory>
 #include "Utils.h"
 
+#include "MeshBase.h"
+
 #define SAFE_RELEASE(p) \
 if (p) {p->Release(); p = nullptr; }
 
@@ -42,7 +44,7 @@ enum class RasterizerState
 };
 
 template <typename EffectType>
-class Mesh final
+class Mesh final : public MeshBase
 {
 public:
 	static_assert(
@@ -65,13 +67,11 @@ public:
 		m_pDiffuseTetxure{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
 		m_pNormalTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath)) },
 		m_pSpecularTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath)) },
-		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) },
-		m_CurrentSampler{ m_pPointSampler }
+		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) }
 		{
 			Utils::ParseOBJ(mainBodyMeshOBJ, m_Vertices, m_Indices);
 			m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 			CreateLayouts(pDevice);
-			CreateSamplerStates(pDevice);
 		};
 
 	Mesh(ID3D11Device* pDevice, const std::vector<VertexIn>& vertices, const std::vector<uint32_t>& indices, PrimitiveTopology _primitive,
@@ -90,25 +90,20 @@ public:
 		m_pDiffuseTetxure{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
 		m_pNormalTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath)) },
 		m_pSpecularTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath)) },
-		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) },
-		m_CurrentSampler{ m_pPointSampler }
+		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) }
 	{
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 		CreateLayouts(pDevice);
-		CreateSamplerStates(pDevice);
 	};
 	~Mesh()
 	{
 		SAFE_RELEASE(m_pVertexBuffer);
 		SAFE_RELEASE(m_pIndexBuffer);
 		SAFE_RELEASE(m_pInputLayout);
-
-		SAFE_RELEASE(m_pPointSampler);
-		SAFE_RELEASE(m_pLinearSampler);
-		SAFE_RELEASE(m_pAnisotropicSampler);
 	}
 
-	void Render(RasterizerState currentRasterizerState, const Matrix& viewProjMatrix, Vector3& cameraPos, ID3D11DeviceContext* pDeviceContext, SamplerType samplerType)
+	void Render(RasterizerState currentRasterizerState, const Matrix& viewProjMatrix, Vector3& cameraPos, 
+		ID3D11DeviceContext* pDeviceContext, ID3D11SamplerState* currentSamplerState)
 	{
 		// SHARED
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
@@ -152,19 +147,6 @@ public:
 			// Set Index Buffer
 			pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
-			switch (samplerType)
-			{
-			case SamplerType::Point:
-				m_CurrentSampler = m_pPointSampler;
-				break;
-			case SamplerType::Linear:
-				m_CurrentSampler = m_pLinearSampler;
-				break;
-			case SamplerType::Anisotropic:
-				m_CurrentSampler = m_pAnisotropicSampler;
-				break;
-			}
-
 			// ----- Apply Technique Pass -----
 			D3DX11_TECHNIQUE_DESC techDesc{};
 			m_pEffect->GetTechnique()->GetDesc(&techDesc);
@@ -173,7 +155,7 @@ public:
 			pass->Apply(0, pDeviceContext);
 
 			// ----- Bind Variables AFTER Technique pass ------
-			pDeviceContext->PSSetSamplers(0, 1, &m_CurrentSampler);
+			pDeviceContext->PSSetSamplers(0, 1, &currentSamplerState);
 
 			//m_pEffect->ApplyPipelineStates(pDeviceContext);
 
@@ -206,14 +188,17 @@ public:
 		m_ScaleMatrix = Matrix::CreateScale(scale);
 	};
 
-	Matrix GetWorldMatrix() const
+	Matrix GetWorldMatrix() const override
 	{
 		return m_WorldMatrix;
 	};
 
 private:
 	// Mesh Members
+	// --- HARDWARE ---
 	std::unique_ptr<EffectType> m_pEffect;
+
+	// --- SHARED ---
 	std::vector<VertexIn> m_Vertices;
 	std::vector<uint32_t> m_Indices;
 
@@ -303,29 +288,7 @@ private:
 		if (FAILED(result))
 			return;
 	};
-	void CreateSamplerStates(ID3D11Device* pDevice)
-	{
-		D3D11_SAMPLER_DESC desc{};
-		desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-		desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-		desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-
-		// Point
-		desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-		m_pPointSampler = nullptr;
-		pDevice->CreateSamplerState(&desc, &m_pPointSampler);
-
-		// Linear
-		desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-		m_pLinearSampler = nullptr;
-		pDevice->CreateSamplerState(&desc, &m_pLinearSampler);
-
-		// Anisotropic
-		desc.Filter = D3D11_FILTER_ANISOTROPIC;
-		desc.MaxAnisotropy = 16;
-		m_pAnisotropicSampler = nullptr;
-		pDevice->CreateSamplerState(&desc, &m_pAnisotropicSampler);
-	}
+	
 
 	// Direct X Resources
 	ID3D11InputLayout* m_pInputLayout{};
@@ -333,9 +296,6 @@ private:
 	ID3D11Buffer* m_pIndexBuffer{};
 	uint32_t m_NumIndices{};
 
-	ID3D11SamplerState* m_pPointSampler{};
-	ID3D11SamplerState* m_pLinearSampler{};
-	ID3D11SamplerState* m_pAnisotropicSampler{};
-	ID3D11SamplerState* m_CurrentSampler{};
+	
 
 };

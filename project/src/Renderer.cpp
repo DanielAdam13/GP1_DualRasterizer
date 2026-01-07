@@ -45,6 +45,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	if (result == S_OK)
 	{
 		m_IsDXInitialized = true;
+		CreateSamplerStates(m_pDevice);
 		std::cout << "DirectX is initialized and ready!\n";
 	}
 	else
@@ -131,6 +132,9 @@ void Renderer::Update(const Timer* pTimer)
 		}
 	}
 
+	m_Camera.Update(pTimer, aspectRatio);
+	Matrix viewProjMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
+
 	// ------- START OF FRAME --------
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
 	{
@@ -164,18 +168,31 @@ void Renderer::Update(const Timer* pTimer)
 		);
 	}
 
-	m_Camera.Update(pTimer, aspectRatio);
-	Matrix viewProjMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
-
-	// ----------- Render Frame -------------	
+	// ----------- RENDER FRAME -------------	
 	// Draw Opaque Meshes first
 	for (auto& pMesh : m_OpaqueMeshes)
 	{
-		pMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSamplerType);
+		if (m_CurrentRasterizerState == RasterizerState::Hardware)
+		{
+			switch (m_CurrentSamplerType)
+			{
+			case SamplerType::Point:
+				m_CurrentSampler = m_pPointSampler;
+				break;
+			case SamplerType::Linear:
+				m_CurrentSampler = m_pLinearSampler;
+				break;
+			case SamplerType::Anisotropic:
+				m_CurrentSampler = m_pAnisotropicSampler;
+				break;
+			}
+		}
+
+		pMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
 
 		if (m_CurrentRasterizerState == RasterizerState::Software)
 		{
-			RenderSoftwareMesh();
+			RenderSoftware();
 		}
 	}
 	// Draw Transparent Meshes AFTER
@@ -183,7 +200,7 @@ void Renderer::Update(const Timer* pTimer)
 	{
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
-			pTrMesh->Render(RasterizerState::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSamplerType);
+			pTrMesh->Render(RasterizerState::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
 		}
 	}
 
@@ -200,7 +217,6 @@ void Renderer::Update(const Timer* pTimer)
 		SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
 		SDL_UpdateWindowSurface(m_pWindow);
 	}
-
 }
 
 void Renderer::Render() const
@@ -209,14 +225,115 @@ void Renderer::Render() const
 		return;
 }
 
-void dae::Renderer::RenderSoftwareMesh()
+void dae::Renderer::RenderSoftware()
 {
+	for (auto& pOpaqMesh : m_OpaqueMeshes)
+	{
+		RenderSoftwareMesh(*pOpaqMesh);
+	}
 
+	// For Transparent Software Meshes
+	/*for (auto& pTrMesh : m_TransparentMeshes)
+	{
+		RenderSoftwareMesh(*pTrMesh);
+	}*/
 }
 
-void dae::Renderer::VertexTransformationFunction()
+void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh)
 {
+	Matrix meshWorldMatrix{ mesh.GetWorldMatrix() };
+}
 
+bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out) const
+{
+	// ------- PROJECTION STAGE ---------
+	// FYI: Model -> World is done is the mesh's UpdateTransforms()
+
+	float cameraFar{ m_Camera.farPlane };
+	float cameraNear{ m_Camera.nearPlane };
+
+	// World -> View
+	std::array<float, 3> originalViewZ{};
+
+	// Storing the original Z
+	for (int triP{}; triP < 3; ++triP)
+	{
+		Vector3 temp{ m_Camera.viewMatrix.TransformPoint(vertices_in[triP].position) };
+		originalViewZ[triP] = temp.z;
+
+		// ----- Frustrum Culling -----
+		if (temp.z < cameraNear || temp.z > cameraFar)
+			return false;
+	}
+
+	// View -> Projection
+	std::array<Vector4, 3> PROJECTIONTriangle{};
+
+	const Matrix worldViewProjectionMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
+
+	for (size_t i{}; i < 3; ++i)
+	{
+		const Vector3 temp{ worldViewProjectionMatrix.TransformPoint(vertices_in[i].position) };
+
+		const Vector4 clipSpaceVertex{ temp.x, temp.y, temp.z, originalViewZ[i] };
+
+		// Perspective divide (to NDC)
+		PROJECTIONTriangle[i] = Vector4{ clipSpaceVertex.x / clipSpaceVertex.w, clipSpaceVertex.y / clipSpaceVertex.w,
+			clipSpaceVertex.z / clipSpaceVertex.w, 1.f / clipSpaceVertex.w };
+	}
+
+	// -------- RASTERIZATION STAGE ----------
+	// Projection (NDC) -> Screen
+	std::array<VertexOut, 3> screenSpaceTriangle;
+
+	for (size_t triP{}; triP < 3; ++triP)
+	{
+		vertices_out[triP].position = Vector4{ (PROJECTIONTriangle[triP].x + 1.f) * 0.5f * m_Width,
+			(1 - PROJECTIONTriangle[triP].y) * 0.5f * m_Height,
+			PROJECTIONTriangle[triP].z, // Z is the new interpolated depth
+			PROJECTIONTriangle[triP].w };  // W stores the original VIEWSPACE z value
+
+		for (const VertexOut& screenV : vertices_out)
+		{
+			if ((screenV.position.x < 0 || screenV.position.x > m_Width) || (screenV.position.y < 0 || screenV.position.y > m_Height))
+				return false;
+		}
+
+		// Return the new screen space triangle
+		vertices_out[triP].UVCoordinate = vertices_in[triP].UVCoordinate * PROJECTIONTriangle[triP].w; // calculation per triangle, not for every pixel
+
+		// Normals and tangents are in world space already due to mesh.UpdateTransforms()
+		vertices_out[triP].normal = vertices_in[triP].normal;
+		vertices_out[triP].tangent = vertices_in[triP].tangent;
+
+		vertices_out[triP].viewDirection = vertices_in[triP].viewDirection;
+	}
+
+	return true;
+}
+
+void dae::Renderer::CreateSamplerStates(ID3D11Device* pDevice)
+{
+	D3D11_SAMPLER_DESC desc{};
+	desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+
+	// Point
+	desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+	m_pPointSampler = nullptr;
+	pDevice->CreateSamplerState(&desc, &m_pPointSampler);
+
+	// Linear
+	desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	m_pLinearSampler = nullptr;
+	pDevice->CreateSamplerState(&desc, &m_pLinearSampler);
+
+	// Anisotropic
+	desc.Filter = D3D11_FILTER_ANISOTROPIC;
+	desc.MaxAnisotropy = 16;
+	m_pAnisotropicSampler = nullptr;
+	pDevice->CreateSamplerState(&desc, &m_pAnisotropicSampler);
 }
 
 HRESULT Renderer::InitializeDirectX()

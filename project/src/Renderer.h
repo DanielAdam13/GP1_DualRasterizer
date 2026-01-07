@@ -50,14 +50,25 @@ namespace dae
 
 		float* m_pDepthBufferPixels{};
 
-		void RenderSoftwareMesh();
-		void VertexTransformationFunction();
+		std::vector<VertexIn> m_TransformedMeshVertices{};
+
+		void RenderSoftware();
+
+		void RenderSoftwareMesh(const MeshBase& mesh);
+		bool VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out) const;
 
 		// --- HARDWARE ---
 		bool m_IsDXInitialized{ false };
 
 		std::unique_ptr<ShadingEffect> m_pOpaqueEffect;
 		std::unique_ptr<TransparencyEffect> m_pTransparencyEffect;
+
+		ID3D11SamplerState* m_pPointSampler{};
+		ID3D11SamplerState* m_pLinearSampler{};
+		ID3D11SamplerState* m_pAnisotropicSampler{};
+		ID3D11SamplerState* m_CurrentSampler{};
+
+		void CreateSamplerStates(ID3D11Device* pDevice);
 
 		//DIRECTX
 		HRESULT InitializeDirectX();

@@ -14,6 +14,7 @@ namespace dae
 		Vector2 UVCoordinate{};
 		Vector3 normal{};
 		Vector3 tangent{};
+		Vector3 viewDirection{}; // Only for Software
 	};
 
 	struct VertexOut
@@ -22,5 +23,6 @@ namespace dae
 		Vector2 UVCoordinate{};
 		Vector3 normal{};
 		Vector3 tangent{};
+		Vector3 viewDirection{}; // Only for Software
 	};
 }
