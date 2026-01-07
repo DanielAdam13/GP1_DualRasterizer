@@ -64,7 +64,7 @@ public:
 		m_TranslationMatrix{ Matrix::CreateTranslation(m_Position) },
 		m_RotationMatrix{ Matrix::CreateRotationY(m_RotY) },
 		m_ScaleMatrix{ Matrix::CreateScale(m_Scale) },
-		m_pDiffuseTetxure{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
+		m_pDiffuseTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
 		m_pNormalTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath)) },
 		m_pSpecularTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath)) },
 		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) }
@@ -87,7 +87,7 @@ public:
 		m_TranslationMatrix{ Matrix::CreateTranslation(m_Position) },
 		m_RotationMatrix{ Matrix::CreateRotationY(m_RotY) },
 		m_ScaleMatrix{ Matrix::CreateScale(m_Scale) },
-		m_pDiffuseTetxure{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
+		m_pDiffuseTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, diffuseTexturePath)) },
 		m_pNormalTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath)) },
 		m_pSpecularTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath)) },
 		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) }
@@ -115,7 +115,7 @@ public:
 			m_pEffect->GetWorldViewProjMatrix()->SetMatrix(reinterpret_cast<float*>(&worldViewProjectionMatrix));
 
 			// Bind Texture's SRV to GPU's resource view
-			m_pEffect->SetDiffuseMap(m_pDiffuseTetxure.get());
+			m_pEffect->SetDiffuseMap(m_pDiffuseTexture.get());
 
 			if (m_pNormalTexture)
 				m_pEffect->SetNormalMap(m_pNormalTexture.get());
@@ -188,9 +188,40 @@ public:
 		m_ScaleMatrix = Matrix::CreateScale(scale);
 	};
 
-	Matrix GetWorldMatrix() const override
+	// Getters
+	virtual Matrix GetWorldMatrix() const override
 	{
 		return m_WorldMatrix;
+	};
+
+	virtual const std::vector<VertexIn>& GetVertices() const override
+	{
+		return m_Vertices;
+	}
+
+	virtual const std::vector<uint32_t>& GetIndices() const override
+	{
+		return m_Indices;
+	}
+
+	virtual const Texture* GetDiffuseTexture() const
+	{
+		return m_pDiffuseTexture.get();
+	};
+
+	virtual const Texture* GetNormalTexture() const
+	{
+		return m_pNormalTexture.get();
+	};
+
+	virtual const Texture* GetSpecularTexture() const
+	{
+		return m_pSpecularTexture.get();
+	};
+
+	virtual const Texture* GetGlossTexture() const 
+	{
+		return m_pGlossTexture.get();
 	};
 
 private:
@@ -213,7 +244,7 @@ private:
 	Matrix m_RotationMatrix;
 	Matrix m_ScaleMatrix;
 
-	const std::unique_ptr<Texture> m_pDiffuseTetxure;
+	const std::unique_ptr<Texture> m_pDiffuseTexture;
 	const std::unique_ptr<Texture> m_pNormalTexture;
 	const std::unique_ptr<Texture> m_pSpecularTexture;
 	const std::unique_ptr<Texture> m_pGlossTexture;
@@ -295,7 +326,4 @@ private:
 	ID3D11Buffer* m_pVertexBuffer{};
 	ID3D11Buffer* m_pIndexBuffer{};
 	uint32_t m_NumIndices{};
-
-	
-
 };

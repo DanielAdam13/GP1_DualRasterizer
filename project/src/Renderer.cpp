@@ -190,6 +190,7 @@ void Renderer::Update(const Timer* pTimer)
 
 		pMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
 
+		// After World Matrix calculations in Mesh::Render
 		if (m_CurrentRasterizerState == RasterizerState::Software)
 		{
 			RenderSoftware();
@@ -242,12 +243,53 @@ void dae::Renderer::RenderSoftware()
 void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh)
 {
 	Matrix meshWorldMatrix{ mesh.GetWorldMatrix() };
+
+	for(size_t i{}; i < mesh.GetIndices().size(); i += 3)
+	{
+		auto i0 = mesh.GetIndices()[i];
+		auto i1 = mesh.GetIndices()[i + 1];
+		auto i2 = mesh.GetIndices()[i + 2];
+
+		std::array<VertexIn, 3> inputTriangle = { mesh.GetVertices()[i0], mesh.GetVertices()[i1], mesh.GetVertices()[i2] };
+		std::array<VertexOut, 3> outputTriangle{}; // Screen Triangle
+
+		//m_TransformedMeshVertices.clear();
+		//m_TransformedMeshVertices.reserve(mesh.GetVertices().size());
+
+		// Model -> Screen
+		if (!VertexTransformationFunction(inputTriangle, outputTriangle, meshWorldMatrix)) // Calculate screen space triangle
+			continue; // Skip triangle
+
+
+	}
 }
 
-bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out) const
+bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out,
+	const Matrix& worldMatrix)
 {
 	// ------- PROJECTION STAGE ---------
-	// FYI: Model -> World is done is the mesh's UpdateTransforms()
+	// Model -> World
+	std::array<VertexIn, 3> worldTriangle{};
+	for (int i{}; i < 3; ++i)
+	{
+		worldTriangle[i] = vertices_in[i];
+		worldTriangle[i].position = worldMatrix.TransformPoint(vertices_in[i].position);
+
+		worldTriangle[i].normal = worldMatrix.TransformVector(vertices_in[i].normal).Normalized();
+		worldTriangle[i].tangent = worldMatrix.TransformVector(vertices_in[i].tangent).Normalized();
+
+		worldTriangle[i].viewDirection = Vector3{ m_Camera.origin - worldTriangle[i].position }.Normalized();
+		
+		/*m_TransformedMeshVertices.emplace_back(vertices_in[i]);
+
+		m_TransformedMeshVertices[i].position = worldMatrix.TransformPoint(vertices_in[i].position);
+
+		m_TransformedMeshVertices[i].normal = worldMatrix.TransformVector(vertices_in[i].normal).Normalized();
+		m_TransformedMeshVertices[i].tangent = worldMatrix.TransformVector(vertices_in[i].tangent).Normalized();
+
+		m_TransformedMeshVertices[i].viewDirection = Vector3{ m_Camera.origin - m_TransformedMeshVertices[i].position }.Normalized();*/
+	}
+
 
 	float cameraFar{ m_Camera.farPlane };
 	float cameraNear{ m_Camera.nearPlane };
@@ -258,7 +300,7 @@ bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& 
 	// Storing the original Z
 	for (int triP{}; triP < 3; ++triP)
 	{
-		Vector3 temp{ m_Camera.viewMatrix.TransformPoint(vertices_in[triP].position) };
+		Vector3 temp{ m_Camera.viewMatrix.TransformPoint(worldTriangle[triP].position) };
 		originalViewZ[triP] = temp.z;
 
 		// ----- Frustrum Culling -----
@@ -273,7 +315,7 @@ bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& 
 
 	for (size_t i{}; i < 3; ++i)
 	{
-		const Vector3 temp{ worldViewProjectionMatrix.TransformPoint(vertices_in[i].position) };
+		const Vector3 temp{ worldViewProjectionMatrix.TransformPoint(worldTriangle[i].position) };
 
 		const Vector4 clipSpaceVertex{ temp.x, temp.y, temp.z, originalViewZ[i] };
 
@@ -300,13 +342,13 @@ bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& 
 		}
 
 		// Return the new screen space triangle
-		vertices_out[triP].UVCoordinate = vertices_in[triP].UVCoordinate * PROJECTIONTriangle[triP].w; // calculation per triangle, not for every pixel
+		vertices_out[triP].UVCoordinate = worldTriangle[triP].UVCoordinate * PROJECTIONTriangle[triP].w; // calculation per triangle, not for every pixel
 
 		// Normals and tangents are in world space already due to mesh.UpdateTransforms()
-		vertices_out[triP].normal = vertices_in[triP].normal;
-		vertices_out[triP].tangent = vertices_in[triP].tangent;
+		vertices_out[triP].normal = worldTriangle[triP].normal;
+		vertices_out[triP].tangent = worldTriangle[triP].tangent;
 
-		vertices_out[triP].viewDirection = vertices_in[triP].viewDirection;
+		vertices_out[triP].viewDirection = worldTriangle[triP].viewDirection;
 	}
 
 	return true;

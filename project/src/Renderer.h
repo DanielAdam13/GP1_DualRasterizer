@@ -55,7 +55,7 @@ namespace dae
 		void RenderSoftware();
 
 		void RenderSoftwareMesh(const MeshBase& mesh);
-		bool VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out) const;
+		bool VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out, const Matrix& worldMatrix);
 
 		// --- HARDWARE ---
 		bool m_IsDXInitialized{ false };
