@@ -1,4 +1,4 @@
-//External includes
+﻿//External includes
 #include "SDL.h"
 #include "SDL_surface.h"
 
@@ -19,7 +19,7 @@ using namespace dae;
 Renderer::Renderer(SDL_Window* pWindow) :
 	m_pWindow(pWindow),
 	m_CurrentSamplerType{ SamplerType::Point },
-	m_RotationFrozen{ false },
+	m_RotationFrozen{ true },
 	m_CurrentRasterizerState{ RasterizerState::Hardware },
 	m_ShowFireMesh{ m_CurrentRasterizerState == RasterizerState::Hardware },
 	m_UniformClearColorActive{ false },
@@ -54,7 +54,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	}
 
 
-	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, 0.1f, 100.f);
+	m_Camera.Initialize(45.f, { 0.f, 5.f, -64.f }, 0.1f, 100.f);
 
 	// Initial Mesh costructor doesn't care about Software or Hardware states
 	m_OpaqueMeshes.reserve(2);
@@ -67,7 +67,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		"resources/vehicle_specular.png",
 		"resources/vehicle_gloss.png"
 	));
-	m_OpaqueMeshes[0]->Translate({ 0.f, 0.f, 50.f });
+	//m_OpaqueMeshes[0]->Translate({ 0.f, 0.f, 50.f });
 
 	m_TransparentMeshes.reserve(1);
 	m_TransparentMeshes.emplace_back(std::make_unique<Mesh<TransparencyEffect>>(
@@ -75,7 +75,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		"resources/fireFX.obj",
 		PrimitiveTopology::TriangleList,
 		"resources/fireFX_diffuse.png"));
-	m_TransparentMeshes[0]->Translate({ 0.f, 0.f, 50.f });
+	//m_TransparentMeshes[0]->Translate({ 0.f, 0.f, 50.f });
 }
 
 Renderer::~Renderer()
@@ -135,6 +135,22 @@ void Renderer::Update(const Timer* pTimer)
 	m_Camera.Update(pTimer, aspectRatio);
 	Matrix viewProjMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
 
+	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	{
+		switch (m_CurrentSamplerType)
+		{
+		case SamplerType::Point:
+			m_CurrentSampler = m_pPointSampler;
+			break;
+		case SamplerType::Linear:
+			m_CurrentSampler = m_pLinearSampler;
+			break;
+		case SamplerType::Anisotropic:
+			m_CurrentSampler = m_pAnisotropicSampler;
+			break;
+		}
+	}
+
 	// ------- START OF FRAME --------
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
 	{
@@ -170,30 +186,14 @@ void Renderer::Update(const Timer* pTimer)
 
 	// ----------- RENDER FRAME -------------	
 	// Draw Opaque Meshes first
-	for (auto& pMesh : m_OpaqueMeshes)
+	for (auto& pOpaqMesh : m_OpaqueMeshes)
 	{
-		if (m_CurrentRasterizerState == RasterizerState::Hardware)
-		{
-			switch (m_CurrentSamplerType)
-			{
-			case SamplerType::Point:
-				m_CurrentSampler = m_pPointSampler;
-				break;
-			case SamplerType::Linear:
-				m_CurrentSampler = m_pLinearSampler;
-				break;
-			case SamplerType::Anisotropic:
-				m_CurrentSampler = m_pAnisotropicSampler;
-				break;
-			}
-		}
-
-		pMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
+		pOpaqMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
 
 		// After World Matrix calculations in Mesh::Render
 		if (m_CurrentRasterizerState == RasterizerState::Software)
 		{
-			RenderSoftware();
+			RenderSoftwareMesh(*pOpaqMesh);
 		}
 	}
 	// Draw Transparent Meshes AFTER
@@ -202,6 +202,11 @@ void Renderer::Update(const Timer* pTimer)
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
 			pTrMesh->Render(RasterizerState::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
+
+			/*if (m_CurrentRasterizerState == RasterizerState::Software)
+			{
+				RenderSoftwareMesh(*pTrMesh);
+			}*/
 		}
 	}
 
@@ -226,132 +231,229 @@ void Renderer::Render() const
 		return;
 }
 
-void dae::Renderer::RenderSoftware()
-{
-	for (auto& pOpaqMesh : m_OpaqueMeshes)
-	{
-		RenderSoftwareMesh(*pOpaqMesh);
-	}
-
-	// For Transparent Software Meshes
-	/*for (auto& pTrMesh : m_TransparentMeshes)
-	{
-		RenderSoftwareMesh(*pTrMesh);
-	}*/
-}
-
 void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh)
 {
 	Matrix meshWorldMatrix{ mesh.GetWorldMatrix() };
 
-	for(size_t i{}; i < mesh.GetIndices().size(); i += 3)
+	VertexTransformationFunction(mesh.GetVertices(), m_TransformedMeshVertices, mesh.GetWorldMatrix());
+
+	const auto& indices = mesh.GetIndices();
+
+	for (size_t i{}; i < indices.size(); i += 3)
 	{
-		auto i0 = mesh.GetIndices()[i];
-		auto i1 = mesh.GetIndices()[i + 1];
-		auto i2 = mesh.GetIndices()[i + 2];
+		std::array<VertexOut, 3> screenTri{ m_TransformedMeshVertices[indices[i]],
+			m_TransformedMeshVertices[indices[i + 1]],
+			m_TransformedMeshVertices[indices[i + 2]] };
 
-		std::array<VertexIn, 3> inputTriangle = { mesh.GetVertices()[i0], mesh.GetVertices()[i1], mesh.GetVertices()[i2] };
-		std::array<VertexOut, 3> outputTriangle{}; // Screen Triangle
+		// ---- Bounding Box -----
+		std::pair<int, int> topLeft{ static_cast<int>(std::floor(
+			std::min({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
+			static_cast<int>(std::floor(
+				std::min({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
+		topLeft.first = std::max(topLeft.first, 0);
+		topLeft.second = std::max(topLeft.second, 0);
 
-		//m_TransformedMeshVertices.clear();
-		//m_TransformedMeshVertices.reserve(mesh.GetVertices().size());
+		std::pair<int, int> bottomRight{ static_cast<int>(std::ceil(
+			std::max({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
+			static_cast<int>(std::ceil(
+				std::max({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
+		bottomRight.first = std::min(bottomRight.first, m_Width - 1);
+		bottomRight.second = std::min(bottomRight.second, m_Height - 1);
 
-		// Model -> Screen
-		if (!VertexTransformationFunction(inputTriangle, outputTriangle, meshWorldMatrix)) // Calculate screen space triangle
-			continue; // Skip triangle
+		// PIXEL LOOP - Bounding Box
+		for (int px{ topLeft.first }; px <= bottomRight.first; ++px)
+		{
+			for (int py{ int(topLeft.second) }; py <= bottomRight.second; ++py)
+			{
+				ColorRGB finalColor{};
 
+				VertexIn pixel{ Vector3{ static_cast<float>(px) + 0.5f, 
+					static_cast<float>(py) + 0.5f, 1.f} }; // We check from the center of the pixel, hence +0.5f
 
+				std::array<float, 3> triangleAreaRatios;
+
+				// INSIDE - OUTSIDE TEST + Depth Interpolation
+				bool pixelInTriangle{ IsPixelIn_Triangle(screenTri, pixel, triangleAreaRatios) };
+
+				if (pixelInTriangle)
+				{
+					//if (pixel.position.z < 0.f || pixel.position.z > 1.f) // Frustrum culling early out
+					//	continue;
+
+					int currentPixelNr{ GetPixelNumber(px, py, m_Width) };
+
+					// Depth Test
+					if (pixel.position.z < m_pDepthBufferPixels[currentPixelNr])
+					{
+						// Depth Write
+						m_pDepthBufferPixels[currentPixelNr] = pixel.position.z;
+
+						// UV, Normal, Tangent, ViewDirection Interpolation
+						InterpolateVertex(triangleAreaRatios, screenTri, pixel);
+
+						ColorRGB pixelColor{ mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate) };
+						//pixel.color = mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate);
+
+						// ----- SHADING -----
+						//pixel.color = PixelShading(pixel, mesh);
+						pixelColor = PixelShading(pixel, mesh, pixelColor);
+
+						switch (m_CurrentPixelColorState)
+						{
+						case dae::Renderer::PixelColorState::FinalColor:
+							//finalColor = pixel.color;
+							finalColor = pixelColor;
+							break;
+						case dae::Renderer::PixelColorState::DepthBuffer:
+							ColorRGB depthValue{ RemapValue(pixel.position.z, 0.94f) };
+							finalColor = depthValue;
+							break;
+						}
+
+						// ---- Render only if overwriting pixel ----
+						//Update Color in Buffer
+						finalColor.MaxToOne();
+
+						m_pBackBufferPixels[currentPixelNr] = SDL_MapRGB(m_pBackBuffer->format,
+							static_cast<uint8_t>(finalColor.r * 255),
+							static_cast<uint8_t>(finalColor.g * 255),
+							static_cast<uint8_t>(finalColor.b * 255));
+					}
+				}
+			}
+		}
 	}
 }
 
-bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out,
-	const Matrix& worldMatrix)
+bool dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, const Matrix& worldMatrix) const
 {
-	// ------- PROJECTION STAGE ---------
-	// Model -> World
-	std::array<VertexIn, 3> worldTriangle{};
-	for (int i{}; i < 3; ++i)
+	vertices_out.clear();
+	vertices_out.resize(vertices_in.size());
+
+	//const float cameraNear{ m_Camera.nearPlane };
+	//const float cameraFar{ m_Camera.farPlane };
+
+	// Precompute Matrices
+	const Matrix viewMatrix{ m_Camera.viewMatrix };
+	const Matrix projectionMatrix{ m_Camera.projectionMatrix };
+	const Matrix worldViewProjectionMatrix{ worldMatrix * viewMatrix * projectionMatrix };
+
+	for (size_t i{}; i < vertices_in.size(); ++i)
 	{
-		worldTriangle[i] = vertices_in[i];
-		worldTriangle[i].position = worldMatrix.TransformPoint(vertices_in[i].position);
+		// ------- PROJECTION STAGE ---------
+		// Model -> World
+		const Vector3 worldPos = worldMatrix.TransformPoint(vertices_in[i].position);
 
-		worldTriangle[i].normal = worldMatrix.TransformVector(vertices_in[i].normal).Normalized();
-		worldTriangle[i].tangent = worldMatrix.TransformVector(vertices_in[i].tangent).Normalized();
+		const Vector3 worldNormal = worldMatrix.TransformVector(vertices_in[i].normal).Normalized();
+		const Vector3 worldTangent = worldMatrix.TransformVector(vertices_in[i].tangent).Normalized();
+		const Vector3 viewDirection = (m_Camera.origin - worldPos).Normalized();
 
-		worldTriangle[i].viewDirection = Vector3{ m_Camera.origin - worldTriangle[i].position }.Normalized();
-		
-		/*m_TransformedMeshVertices.emplace_back(vertices_in[i]);
+		// World → View
+		const Vector3 viewPos = viewMatrix.TransformPoint(worldPos);
 
-		m_TransformedMeshVertices[i].position = worldMatrix.TransformPoint(vertices_in[i].position);
+		// View → Projection (clip space)
+		const Vector3 projectedVertex = projectionMatrix.TransformPoint(viewPos);
 
-		m_TransformedMeshVertices[i].normal = worldMatrix.TransformVector(vertices_in[i].normal).Normalized();
-		m_TransformedMeshVertices[i].tangent = worldMatrix.TransformVector(vertices_in[i].tangent).Normalized();
+		// Store original view-space Z for perspective-correct interpolation
+		const float w = viewPos.z;
 
-		m_TransformedMeshVertices[i].viewDirection = Vector3{ m_Camera.origin - m_TransformedMeshVertices[i].position }.Normalized();*/
-	}
+		// Perspective Divide → NDC
+		const float invW = 1.f / w;
 
+		Vector3 NdcVertex{ projectedVertex.x * invW, projectedVertex.y * invW, projectedVertex.z* invW };
 
-	float cameraFar{ m_Camera.farPlane };
-	float cameraNear{ m_Camera.nearPlane };
+		// NDC → Screen space
+		vertices_out[i].position = Vector4 {
+			(NdcVertex.x + 1.f) * 0.5f * m_Width,
+			(1.f - NdcVertex.y) * 0.5f * m_Height,
+			NdcVertex.z,
+			invW        // Store 1/W for interpolation
+		};
 
-	// World -> View
-	std::array<float, 3> originalViewZ{};
+		vertices_out[i].UVCoordinate = vertices_in[i].UVCoordinate * invW;
 
-	// Storing the original Z
-	for (int triP{}; triP < 3; ++triP)
-	{
-		Vector3 temp{ m_Camera.viewMatrix.TransformPoint(worldTriangle[triP].position) };
-		originalViewZ[triP] = temp.z;
-
-		// ----- Frustrum Culling -----
-		if (temp.z < cameraNear || temp.z > cameraFar)
-			return false;
-	}
-
-	// View -> Projection
-	std::array<Vector4, 3> PROJECTIONTriangle{};
-
-	const Matrix worldViewProjectionMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
-
-	for (size_t i{}; i < 3; ++i)
-	{
-		const Vector3 temp{ worldViewProjectionMatrix.TransformPoint(worldTriangle[i].position) };
-
-		const Vector4 clipSpaceVertex{ temp.x, temp.y, temp.z, originalViewZ[i] };
-
-		// Perspective divide (to NDC)
-		PROJECTIONTriangle[i] = Vector4{ clipSpaceVertex.x / clipSpaceVertex.w, clipSpaceVertex.y / clipSpaceVertex.w,
-			clipSpaceVertex.z / clipSpaceVertex.w, 1.f / clipSpaceVertex.w };
-	}
-
-	// -------- RASTERIZATION STAGE ----------
-	// Projection (NDC) -> Screen
-	std::array<VertexOut, 3> screenSpaceTriangle;
-
-	for (size_t triP{}; triP < 3; ++triP)
-	{
-		vertices_out[triP].position = Vector4{ (PROJECTIONTriangle[triP].x + 1.f) * 0.5f * m_Width,
-			(1 - PROJECTIONTriangle[triP].y) * 0.5f * m_Height,
-			PROJECTIONTriangle[triP].z, // Z is the new interpolated depth
-			PROJECTIONTriangle[triP].w };  // W stores the original VIEWSPACE z value
-
-		for (const VertexOut& screenV : vertices_out)
-		{
-			if ((screenV.position.x < 0 || screenV.position.x > m_Width) || (screenV.position.y < 0 || screenV.position.y > m_Height))
-				return false;
-		}
-
-		// Return the new screen space triangle
-		vertices_out[triP].UVCoordinate = worldTriangle[triP].UVCoordinate * PROJECTIONTriangle[triP].w; // calculation per triangle, not for every pixel
-
-		// Normals and tangents are in world space already due to mesh.UpdateTransforms()
-		vertices_out[triP].normal = worldTriangle[triP].normal;
-		vertices_out[triP].tangent = worldTriangle[triP].tangent;
-
-		vertices_out[triP].viewDirection = worldTriangle[triP].viewDirection;
+		vertices_out[i].normal = worldNormal;
+		vertices_out[i].tangent = worldTangent;
+		vertices_out[i].viewDirection = viewDirection;
 	}
 
 	return true;
+}
+
+ColorRGB dae::Renderer::PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const
+{
+	ColorRGB finalShadedColor{};
+	const Vector3 lightDirection{ -Vector3{0.577f, -0.577f, 0.577f}.Normalized() }; // HAVE TO INVERT WHEN USING
+	constexpr float lightIntensity{ 1.f };
+
+	Vector3 finalNormal{ pixel.normal };
+
+	// Normal Map Sampling
+	if (mesh.GetNormalTexture() && m_ShowNormalMap)
+	{
+		const Vector3 binormal{ Vector3::Cross(pixel.normal, pixel.tangent) };
+
+		// Tangent -> World
+		const Matrix tangentSpaceMatrix{ pixel.tangent, binormal, pixel.normal, {} };
+
+		const ColorRGB sampledNormalColor{ mesh.GetNormalTexture()->Sample(pixel.UVCoordinate)};
+
+		const Vector3 tangentSpaceNormal{
+			sampledNormalColor.r * 2.f - 1.f,
+			sampledNormalColor.g * 2.f - 1.f,
+			sampledNormalColor.b * 2.f - 1.f
+		};
+
+		// Tangent Space to World Space
+		finalNormal = tangentSpaceMatrix.TransformVector(tangentSpaceNormal).Normalized();
+	}
+
+	// Lambert Diffuse
+	const float cosTheta{ std::min(1.f, std::max(0.f, Vector3::Dot(lightDirection, finalNormal))) };
+	const ColorRGB lambertDiffuse{ pixelColor };
+	
+
+	const ColorRGB lambertColor(GetLambertColor(lambertDiffuse, cosTheta) * lightIntensity);
+
+	// Specular Color
+	ColorRGB specularColor{ colors::Black };
+	if (m_CurrentLightingMode == LightingMode::Specular || m_CurrentLightingMode == LightingMode::Combined)
+	{
+		if (mesh.GetSpecularTexture() && mesh.GetGlossTexture())
+		{
+			const ColorRGB sampledSpecular{ mesh.GetSpecularTexture()->Sample(pixel.UVCoordinate) };
+			const ColorRGB sampledGlossiness{ mesh.GetGlossTexture()->Sample(pixel.UVCoordinate) };
+
+			const float shininess{ 25.f };
+			const float phongExponent{ sampledGlossiness.r * shininess };
+
+			specularColor = Phong(sampledSpecular, sampledSpecular.r, phongExponent,
+				lightDirection, pixel.viewDirection.Normalized(), finalNormal) * lightIntensity;
+		}
+	}
+
+	// Ambient Color
+	const float ambientStrength{ 0.03f };
+	const ColorRGB ambientColor{ lambertDiffuse * ambientStrength };
+	finalShadedColor += ambientColor;
+
+	switch (m_CurrentLightingMode)
+	{
+	case dae::Renderer::LightingMode::ObservedArea:
+		finalShadedColor = ColorRGB{ cosTheta, cosTheta, cosTheta };
+		break;
+	case dae::Renderer::LightingMode::Diffuse:
+		finalShadedColor = lambertColor;
+		break;
+	case dae::Renderer::LightingMode::Specular:
+		finalShadedColor = specularColor;
+		break;
+	case dae::Renderer::LightingMode::Combined:
+		finalShadedColor = lambertColor + specularColor;
+		break;
+	}
+
+	return finalShadedColor;
 }
 
 void dae::Renderer::CreateSamplerStates(ID3D11Device* pDevice)

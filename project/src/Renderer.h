@@ -50,12 +50,12 @@ namespace dae
 
 		float* m_pDepthBufferPixels{};
 
-		std::vector<VertexIn> m_TransformedMeshVertices{};
-
-		void RenderSoftware();
+		std::vector<VertexOut> m_TransformedMeshVertices{};
 
 		void RenderSoftwareMesh(const MeshBase& mesh);
-		bool VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out, const Matrix& worldMatrix);
+
+		bool VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, const Matrix& worldMatrix) const;
+		ColorRGB PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const;
 
 		// --- HARDWARE ---
 		bool m_IsDXInitialized{ false };

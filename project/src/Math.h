@@ -127,7 +127,16 @@ inline auto RemapValue(float value, float threshold = 0.95f) -> ColorRGB
 	return ColorRGB{ t, t, t };
 }
 
-inline auto Phong(const ColorRGB& specularColor, float reflectance, float phongExponent, const Vector3& lightVector, const Vector3& viewVector, const Vector3& normal) -> ColorRGB
+inline ColorRGB GetLambertColor(const ColorRGB& sampledDiffuse, float cosTheta)
+{
+	constexpr float diffuseReflectance{ 7.f };
+
+	const ColorRGB LambertColor{ (sampledDiffuse * diffuseReflectance / PI) * cosTheta };
+
+	return LambertColor;
+}
+
+inline ColorRGB Phong(const ColorRGB& specularColor, float reflectance, float phongExponent, const Vector3& lightVector, const Vector3& viewVector, const Vector3& normal)
 {
 	const float lightHitNormalDot{ Vector3::Dot(normal, lightVector) };
 
@@ -141,4 +150,18 @@ inline auto Phong(const ColorRGB& specularColor, float reflectance, float phongE
 	const float expCosA{ powf(cosA, phongExponent) };
 
 	return reflectance * specularColor * expCosA;
+}
+
+inline bool IsTriangleOffScreen(const std::array<VertexOut, 3>& tri, int screenWidth, int screenHeight)
+{
+	for (const auto& v : tri)
+	{
+		// If any vertex is outside the screen
+		if (v.position.x < 0.f || v.position.x >= screenWidth ||
+			v.position.y < 0.f || v.position.y >= screenHeight)
+		{
+			return true;
+		}
+	}
+	return false;
 }

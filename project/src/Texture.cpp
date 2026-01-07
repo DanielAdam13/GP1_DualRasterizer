@@ -4,10 +4,14 @@
 #include <fstream>
 #include <iostream>
 
+using namespace dae;
+
 #define SAFE_RELEASE(p) \
 if (p) {p->Release(); p = nullptr; }
 
-Texture::Texture()
+Texture::Texture(SDL_Surface * pSurface) :
+	m_pSurface{ pSurface },
+	m_pSurfacePixels{ (uint32_t*)pSurface->pixels }
 {
 }
 
@@ -15,6 +19,13 @@ Texture::~Texture()
 {
 	SAFE_RELEASE(m_pSRV);
 	SAFE_RELEASE(m_pResourceTexture);
+
+	if (m_pSurface)
+	{
+		SDL_FreeSurface(m_pSurface);
+		m_pSurface = nullptr;
+		m_pSurfacePixels = nullptr;
+	}
 }
 
 Texture* Texture::LoadFromFile(ID3D11Device* device, const std::string& filePath)
@@ -27,7 +38,7 @@ Texture* Texture::LoadFromFile(ID3D11Device* device, const std::string& filePath
 		return nullptr;
 	}
 
-	Texture* newTexture{ new Texture() };
+	Texture* newTexture{ new Texture(surface) };
 
 	// ----- Create Texture2D -----
 	D3D11_TEXTURE2D_DESC desc{};
@@ -74,7 +85,7 @@ Texture* Texture::LoadFromFile(ID3D11Device* device, const std::string& filePath
 		return nullptr;
 	}
 
-	SDL_FreeSurface(surface); // Not needed anymore
+	//SDL_FreeSurface(surface); // Not needed anymore
 
 	return newTexture;
 }
@@ -82,4 +93,18 @@ Texture* Texture::LoadFromFile(ID3D11Device* device, const std::string& filePath
 ID3D11ShaderResourceView* Texture::GetSRV() const
 {
 	return m_pSRV;
+}
+
+ColorRGB Texture::Sample(const Vector2& uv) const
+{
+	int x{ static_cast<int>(uv.x * m_pSurface->w) };
+	int y{ static_cast<int>(uv.y * m_pSurface->h) };
+
+	int pixelIndex{ x + y * m_pSurface->w };
+	uint32_t pixel{ m_pSurfacePixels[pixelIndex] };
+
+	uint8_t r, g, b;
+	SDL_GetRGB(pixel, m_pSurface->format, &r, &g, &b);
+
+	return ColorRGB(r / 255.f, g / 255.f, b / 255.f);
 }
