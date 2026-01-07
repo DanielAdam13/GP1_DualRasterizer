@@ -82,5 +82,26 @@ namespace dae
 		bool m_ShowFireMesh;
 
 		bool m_UniformClearColorActive;
+
+		// --- SOFTWARE ---
+		enum class LightingMode
+		{
+			ObservedArea,
+			Diffuse,
+			Specular,
+			Combined
+		};
+		LightingMode m_CurrentLightingMode;
+
+		bool m_ShowNormalMap;
+
+		enum class PixelColorState
+		{
+			FinalColor,
+			DepthBuffer
+		};
+		PixelColorState m_CurrentPixelColorState;
+
+		bool m_ShowBoundingBox;
 	};
 }

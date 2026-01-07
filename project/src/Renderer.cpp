@@ -22,7 +22,11 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_RotationFrozen{ false },
 	m_CurrentRasterizerState{ RasterizerState::Hardware },
 	m_ShowFireMesh{ m_CurrentRasterizerState == RasterizerState::Hardware },
-	m_UniformClearColorActive{ false }
+	m_UniformClearColorActive{ false },
+	m_CurrentLightingMode{ LightingMode::Combined },
+	m_ShowNormalMap{ true },
+	m_CurrentPixelColorState{ PixelColorState::FinalColor },
+	m_ShowBoundingBox{ false }
 {
 	// Initialize
 	SDL_GetWindowSize(pWindow, &m_Width, &m_Height);
@@ -345,7 +349,7 @@ void dae::Renderer::ProcessInput()
 	const uint8_t* pKeyboardState{ SDL_GetKeyboardState(nullptr) };
 
 	// --- SHARED ---
-	// 
+	
 	// RASTERIZER STATE
 	static bool wasF1Pressed{ false };
 	bool isF1Pressed = pKeyboardState[SDL_SCANCODE_F1];
@@ -403,7 +407,55 @@ void dae::Renderer::ProcessInput()
 	}
 	else // ------ SOFTWARE ONLY ------
 	{
-		
+		// Switch Lighting Modes
+		static bool wasF5Pressed{ false };
+		bool isF5Pressed = pKeyboardState[SDL_SCANCODE_F5];
+
+		if (wasF5Pressed && !isF5Pressed)
+		{
+			m_CurrentLightingMode = static_cast<LightingMode>(static_cast<int>(m_CurrentLightingMode) + 1);
+
+			if (m_CurrentLightingMode > LightingMode::Combined)
+			{
+				m_CurrentLightingMode = LightingMode::ObservedArea;
+			}
+		}
+		wasF5Pressed = isF5Pressed;
+
+		// Toggle Normal Map
+		static bool wasF6Pressed{ false };
+		bool isF6Pressed = pKeyboardState[SDL_SCANCODE_F6];
+
+		if (wasF6Pressed && !isF6Pressed)
+		{
+			m_ShowNormalMap = !m_ShowNormalMap;
+		}
+		wasF6Pressed = isF6Pressed;
+
+		// Depth Buffer Visualization
+		static bool wasF7Pressed{ false };
+		bool isF7Pressed = pKeyboardState[SDL_SCANCODE_F7];
+
+		if (wasF7Pressed && !isF7Pressed)
+		{
+			m_CurrentPixelColorState = static_cast<PixelColorState>(static_cast<int>(m_CurrentPixelColorState) + 1);
+
+			if (m_CurrentPixelColorState > PixelColorState::DepthBuffer)
+			{
+				m_CurrentPixelColorState = PixelColorState::FinalColor;
+			}
+		}
+		wasF7Pressed = isF7Pressed;
+
+		// Toggle Bounding Box
+		static bool wasF8Pressed{ false };
+		bool isF8Pressed = pKeyboardState[SDL_SCANCODE_F8];
+
+		if (wasF8Pressed && !isF8Pressed)
+		{
+			m_ShowBoundingBox = !m_ShowBoundingBox;
+		}
+		wasF8Pressed = isF8Pressed;
 	}
 	
 }
