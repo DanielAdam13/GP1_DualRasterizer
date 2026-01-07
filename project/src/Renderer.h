@@ -56,6 +56,7 @@ namespace dae
 
 		void RenderSoftwareMesh(const MeshBase& mesh);
 		bool VertexTransformationFunction(const std::array<VertexIn, 3>& vertices_in, std::array<VertexOut, 3>& vertices_out, const Matrix& worldMatrix);
+		ColorRGB PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const;
 
 		// --- HARDWARE ---
 		bool m_IsDXInitialized{ false };

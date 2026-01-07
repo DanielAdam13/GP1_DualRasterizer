@@ -251,16 +251,88 @@ void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh)
 		auto i2 = mesh.GetIndices()[i + 2];
 
 		std::array<VertexIn, 3> inputTriangle = { mesh.GetVertices()[i0], mesh.GetVertices()[i1], mesh.GetVertices()[i2] };
-		std::array<VertexOut, 3> outputTriangle{}; // Screen Triangle
+		std::array<VertexOut, 3> screenTri{}; // Screen Triangle
 
 		//m_TransformedMeshVertices.clear();
 		//m_TransformedMeshVertices.reserve(mesh.GetVertices().size());
 
 		// Model -> Screen
-		if (!VertexTransformationFunction(inputTriangle, outputTriangle, meshWorldMatrix)) // Calculate screen space triangle
+		if (!VertexTransformationFunction(inputTriangle, screenTri, meshWorldMatrix)) // Calculate screen space triangle
 			continue; // Skip triangle
 
+		// ---- Bounding Box -----
+		std::pair<int, int> topLeft{ static_cast<int>(std::floor(std::min({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
+			static_cast<int>(std::floor(std::min({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
+		topLeft.first = std::max(topLeft.first, 0);
+		topLeft.second = std::max(topLeft.second, 0);
 
+		std::pair<int, int> bottomRight{ static_cast<int>(std::ceil(std::max({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
+			static_cast<int>(std::ceil(std::max({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
+		bottomRight.first = std::min(bottomRight.first, m_Width - 1);
+		bottomRight.second = std::min(bottomRight.second, m_Height - 1);
+
+		// PIXEL LOOP - Bounding Box
+		for (int px{ topLeft.first }; px <= bottomRight.first; ++px)
+		{
+			for (int py{ int(topLeft.second) }; py <= bottomRight.second; ++py)
+			{
+				ColorRGB finalColor{};
+
+				VertexIn pixel{ Vector3{ static_cast<float>(px) + 0.5f, static_cast<float>(py) + 0.5f, 1.f} }; // We check from the center of the pixel, hence +0.5f
+
+				std::array<float, 3> triangleAreaRatios;
+
+				// INSIDE - OUTSIDE TEST + Depth Interpolation
+				bool pixelInTriangle{ IsPixelIn_Triangle(screenTri, pixel, triangleAreaRatios) };
+
+				if (pixelInTriangle)
+				{
+					if (pixel.position.z < 0.f || pixel.position.z > 1.f) // Frustrum culling early out
+						continue;
+
+					int currentPixelNr{ GetPixelNumber(px, py, m_Width) };
+
+					// Depth Test
+					if (pixel.position.z < m_pDepthBufferPixels[currentPixelNr])
+					{
+						// Depth Write
+						m_pDepthBufferPixels[currentPixelNr] = pixel.position.z;
+
+						// UV, Normal, Tangent, ViewDirection Interpolation
+						InterpolateVertex(triangleAreaRatios, screenTri, pixel);
+
+						ColorRGB pixelColor{ mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate) };
+						//pixel.color = mesh.GetDiffuseTexture()->Sample(pixel.uv);
+
+						// ----- SHADING -----
+						//pixel.color = PixelShading(pixel, mesh);
+						pixelColor = PixelShading(pixel, mesh, pixelColor);
+						 
+
+						switch (m_CurrentPixelColorState)
+						{
+						case dae::Renderer::PixelColorState::FinalColor:
+							//finalColor = pixel.color;
+							finalColor = pixelColor;
+							break;
+						case dae::Renderer::PixelColorState::DepthBuffer:
+							ColorRGB depthValue{ RemapValue(pixel.position.z, 0.94f) };
+							finalColor = depthValue;
+							break;
+						}
+
+						// ---- Render only if overwriting pixel ----
+						//Update Color in Buffer
+						finalColor.MaxToOne();
+
+						m_pBackBufferPixels[currentPixelNr] = SDL_MapRGB(m_pBackBuffer->format,
+							static_cast<uint8_t>(finalColor.r * 255),
+							static_cast<uint8_t>(finalColor.g * 255),
+							static_cast<uint8_t>(finalColor.b * 255));
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -352,6 +424,82 @@ bool dae::Renderer::VertexTransformationFunction(const std::array<VertexIn, 3>& 
 	}
 
 	return true;
+}
+
+ColorRGB dae::Renderer::PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const
+{
+	ColorRGB finalShadedColor{};
+	const Vector3 lightDirection{ -Vector3{0.577f, -0.577f, 0.577f}.Normalized() }; // HAVE TO INVERT WHEN USING
+	constexpr float lightIntensity{ 1.f };
+
+	Vector3 finalNormal{ pixel.normal };
+
+	// Normal Map Sampling
+	if (mesh.GetNormalTexture() && m_ShowNormalMap)
+	{
+		const Vector3 binormal{ Vector3::Cross(pixel.normal, pixel.tangent) };
+
+		// Tangent -> World
+		const Matrix tangentSpaceMatrix{ pixel.tangent, binormal, pixel.normal, {} };
+
+		const ColorRGB sampledNormalColor{ mesh.GetNormalTexture()->Sample(pixel.UVCoordinate)};
+
+		const Vector3 tangentSpaceNormal{
+			sampledNormalColor.r * 2.f - 1.f,
+			sampledNormalColor.g * 2.f - 1.f,
+			sampledNormalColor.b * 2.f - 1.f
+		};
+
+		// Tangent Space to World Space
+		finalNormal = tangentSpaceMatrix.TransformVector(tangentSpaceNormal).Normalized();
+	}
+
+	// Lambert Diffuse
+	const float cosTheta{ std::min(1.f, std::max(0.f, Vector3::Dot(lightDirection, finalNormal))) };
+	const ColorRGB lambertDiffuse{ pixelColor };
+
+
+	const ColorRGB lambertColor(GetLambertColor(lambertDiffuse, cosTheta) * lightIntensity);
+
+	// Specular Color
+	ColorRGB specularColor{ colors::Black };
+	if (m_CurrentLightingMode == LightingMode::Specular || m_CurrentLightingMode == LightingMode::Combined)
+	{
+		if (mesh.GetSpecularTexture() && mesh.GetGlossTexture())
+		{
+			const ColorRGB sampledSpecular{ mesh.GetSpecularTexture()->Sample(pixel.UVCoordinate)};
+			const ColorRGB sampledGlossiness{ mesh.GetGlossTexture()->Sample(pixel.UVCoordinate)};
+
+			const float shininess{ 25.f };
+			const float phongExponent{ sampledGlossiness.r * shininess };
+
+			specularColor = Phong(sampledSpecular, sampledSpecular.r, phongExponent,
+				lightDirection, pixel.viewDirection.Normalized(), finalNormal) * lightIntensity;
+		}
+	}
+
+	// Ambient Color
+	const float ambientStrength{ 0.03f };
+	const ColorRGB ambientColor{ lambertDiffuse * ambientStrength };
+	finalShadedColor += ambientColor;
+
+	switch (m_CurrentLightingMode)
+	{
+	case dae::Renderer::LightingMode::ObservedArea:
+		finalShadedColor = ColorRGB{ cosTheta, cosTheta, cosTheta };
+		break;
+	case dae::Renderer::LightingMode::Diffuse:
+		finalShadedColor = lambertColor;
+		break;
+	case dae::Renderer::LightingMode::Specular:
+		finalShadedColor = specularColor;
+		break;
+	case dae::Renderer::LightingMode::Combined:
+		finalShadedColor = lambertColor + specularColor;
+		break;
+	}
+
+	return finalShadedColor;
 }
 
 void dae::Renderer::CreateSamplerStates(ID3D11Device* pDevice)

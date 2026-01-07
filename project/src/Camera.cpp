@@ -3,9 +3,9 @@
 
 #pragma once
 
-constexpr float CameraRotationSpeed = dae::PI * 5.f;
-constexpr float CameraMoveSpeedMouse = 500.f;
-constexpr float CameraMoveSpeedKeys = 50.f;
+constexpr float CameraRotationSpeed = dae::PI * 1.f;
+constexpr float CameraMoveSpeedMouse = 50.f;
+constexpr float CameraMoveSpeedKeys = 5.f;
 
 namespace dae
 {

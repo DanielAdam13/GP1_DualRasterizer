@@ -127,7 +127,16 @@ inline auto RemapValue(float value, float threshold = 0.95f) -> ColorRGB
 	return ColorRGB{ t, t, t };
 }
 
-inline auto Phong(const ColorRGB& specularColor, float reflectance, float phongExponent, const Vector3& lightVector, const Vector3& viewVector, const Vector3& normal) -> ColorRGB
+inline ColorRGB GetLambertColor(const ColorRGB& sampledDiffuse, float cosTheta)
+{
+	constexpr float diffuseReflectance{ 7.f };
+
+	const ColorRGB LambertColor{ (sampledDiffuse * diffuseReflectance / PI) * cosTheta };
+
+	return LambertColor;
+}
+
+inline ColorRGB Phong(const ColorRGB& specularColor, float reflectance, float phongExponent, const Vector3& lightVector, const Vector3& viewVector, const Vector3& normal)
 {
 	const float lightHitNormalDot{ Vector3::Dot(normal, lightVector) };
 
