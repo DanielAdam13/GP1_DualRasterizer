@@ -150,8 +150,6 @@ void Renderer::Update(const Timer* pTimer)
 			break;
 		}
 	}
-
-	
 }
 
 void Renderer::Render()
@@ -243,13 +241,32 @@ void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh, const Matrix& viewP
 
 	VertexTransformationFunction(mesh.GetVertices(), m_TransformedMeshVertices, worldViewProjectionMatrix, mesh.GetWorldMatrix());
 
-	const auto& indices = mesh.GetIndices();
+	const auto& meshIndices{ mesh.GetIndices() };
 
-	for (size_t i{}; i < indices.size(); i += 3)
+	for (size_t i{}; i < meshIndices.size(); i += 3)
 	{
-		std::array<VertexOut, 3> screenTri{ m_TransformedMeshVertices[indices[i]],
-			m_TransformedMeshVertices[indices[i + 1]],
-			m_TransformedMeshVertices[indices[i + 2]] };
+		std::array<VertexOut, 3> screenTri{ m_TransformedMeshVertices[meshIndices[i]],
+			m_TransformedMeshVertices[meshIndices[i + 1]],
+			m_TransformedMeshVertices[meshIndices[i + 2]] };
+
+		// --- INSIDE SCREEN CHECK ---
+		if (std::any_of(screenTri.begin(), screenTri.end(),
+			[&](const VertexOut& v) {
+				return v.position.x < 0.f || v.position.x >= m_Width ||
+					v.position.y < 0.f || v.position.y >= m_Height;
+			}))
+		{
+			continue; // Skip triangle
+		}
+
+		// --- FRUSTRUM CULLING ---
+		if (std::any_of(screenTri.begin(), screenTri.end(),
+			[&](const VertexOut& v) {
+				return v.position.z < 0.f || v.position.z > 1.f;
+			}))
+		{
+			continue; // Skip triangle
+		}
 
 		// ---- Bounding Box -----
 		std::pair<int, int> topLeft{ static_cast<int>(std::floor(
@@ -331,7 +348,7 @@ void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh, const Matrix& viewP
 void dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, 
 	const Matrix& WVPMatrix, const Matrix& worldMatrix) const
 {
-	if (vertices_out.capacity() == 0)
+	if (vertices_out.capacity() < vertices_in.size())
 	{
 		vertices_out.reserve(vertices_in.size());
 	}
@@ -350,20 +367,22 @@ void dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& ve
 		const Vector3 projectedPos{ Vector3(clipPos) * invW };
 
 		// Perspective -> Screen
-		vertices_out[i].position = Vector4{ (projectedPos.x + 1.f) * 0.5f * m_Width,
+		const Vector4 screenPos{ (projectedPos.x + 1.f) * 0.5f * m_Width,
 			(1.f - projectedPos.y) * 0.5f * m_Height,
 			projectedPos.z,
 			invW
 		};
 
-		vertices_out[i].UVCoordinate = vertices_in[i].UVCoordinate * invW;
+		const auto perspectiveUV{ vertices_in[i].UVCoordinate * invW };
 
 		// Model -> World
-		vertices_out[i].normal = worldMatrix.TransformVector(vertices_in[i].normal);
-		vertices_out[i].tangent = worldMatrix.TransformVector(vertices_in[i].tangent);
+		const auto worldNormal{ worldMatrix.TransformVector(vertices_in[i].normal) };
+		const auto worldTangent{ worldMatrix.TransformVector(vertices_in[i].tangent) };
 		
 		const Vector3 worldPos{ worldMatrix.TransformPoint(vertices_in[i].position) };
-		vertices_out[i].viewDirection = Vector3{ m_Camera.origin - worldPos }.Normalized();
+		const auto viewDir{ Vector3{ m_Camera.origin - worldPos }.Normalized() };
+
+		vertices_out.emplace_back(VertexOut{ screenPos, perspectiveUV, worldNormal, worldTangent, viewDir });
 	}
 }
 
