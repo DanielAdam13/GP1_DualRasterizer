@@ -107,11 +107,11 @@ public:
 	{
 		// SHARED
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
-		Matrix worldViewProjectionMatrix{ m_WorldMatrix * viewProjMatrix };
 
 		// HARDWARE
 		if (currentRasterizerState == RasterizerState::Hardware)
 		{
+			Matrix worldViewProjectionMatrix{ m_WorldMatrix * viewProjMatrix };
 			m_pEffect->GetWorldViewProjMatrix()->SetMatrix(reinterpret_cast<float*>(&worldViewProjectionMatrix));
 
 			// Bind Texture's SRV to GPU's resource view

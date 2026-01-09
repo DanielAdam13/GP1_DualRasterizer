@@ -54,7 +54,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	}
 
 
-	m_Camera.Initialize(45.f, { 0.f, 5.f, -64.f }, 0.1f, 100.f);
+	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, 0.1f, 100.f);
 
 	// Initial Mesh costructor doesn't care about Software or Hardware states
 	m_OpaqueMeshes.reserve(2);
@@ -67,7 +67,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		"resources/vehicle_specular.png",
 		"resources/vehicle_gloss.png"
 	));
-	//m_OpaqueMeshes[0]->Translate({ 0.f, 0.f, 50.f });
+	m_OpaqueMeshes[0]->Translate({ 0.f, 0.f, 50.f });
 
 	m_TransparentMeshes.reserve(1);
 	m_TransparentMeshes.emplace_back(std::make_unique<Mesh<TransparencyEffect>>(
@@ -75,7 +75,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		"resources/fireFX.obj",
 		PrimitiveTopology::TriangleList,
 		"resources/fireFX_diffuse.png"));
-	//m_TransparentMeshes[0]->Translate({ 0.f, 0.f, 50.f });
+	m_TransparentMeshes[0]->Translate({ 0.f, 0.f, 50.f });
 }
 
 Renderer::~Renderer()
@@ -133,7 +133,7 @@ void Renderer::Update(const Timer* pTimer)
 	}
 
 	m_Camera.Update(pTimer, aspectRatio);
-	Matrix viewProjMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
+	
 
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
 	{
@@ -150,6 +150,16 @@ void Renderer::Update(const Timer* pTimer)
 			break;
 		}
 	}
+
+	
+}
+
+void Renderer::Render()
+{
+	if (!m_IsDXInitialized)
+		return;
+
+	Matrix viewProjMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
 
 	// ------- START OF FRAME --------
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
@@ -177,9 +187,9 @@ void Renderer::Update(const Timer* pTimer)
 		SDL_FillRect(
 			m_pBackBuffer,
 			nullptr, // null fills the whole surface
-			SDL_MapRGB(m_pBackBuffer->format, 
-				currentSoftwareBackgroundColor[0], 
-				currentSoftwareBackgroundColor[1], 
+			SDL_MapRGB(m_pBackBuffer->format,
+				currentSoftwareBackgroundColor[0],
+				currentSoftwareBackgroundColor[1],
 				currentSoftwareBackgroundColor[2]) // Background color
 		);
 	}
@@ -193,7 +203,7 @@ void Renderer::Update(const Timer* pTimer)
 		// After World Matrix calculations in Mesh::Render
 		if (m_CurrentRasterizerState == RasterizerState::Software)
 		{
-			RenderSoftwareMesh(*pOpaqMesh);
+			RenderSoftwareMesh(*pOpaqMesh, viewProjMatrix);
 		}
 	}
 	// Draw Transparent Meshes AFTER
@@ -225,17 +235,13 @@ void Renderer::Update(const Timer* pTimer)
 	}
 }
 
-void Renderer::Render() const
+void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh, const Matrix& viewProjMatrix)
 {
-	if (!m_IsDXInitialized)
-		return;
-}
+	Matrix worldViewProjectionMatrix{ mesh.GetWorldMatrix() * viewProjMatrix };
 
-void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh)
-{
-	Matrix meshWorldMatrix{ mesh.GetWorldMatrix() };
+	m_TransformedMeshVertices.clear();
 
-	VertexTransformationFunction(mesh.GetVertices(), m_TransformedMeshVertices, mesh.GetWorldMatrix());
+	VertexTransformationFunction(mesh.GetVertices(), m_TransformedMeshVertices, worldViewProjectionMatrix, mesh.GetWorldMatrix());
 
 	const auto& indices = mesh.GetIndices();
 
@@ -292,16 +298,13 @@ void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh)
 						InterpolateVertex(triangleAreaRatios, screenTri, pixel);
 
 						ColorRGB pixelColor{ mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate) };
-						//pixel.color = mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate);
 
 						// ----- SHADING -----
-						//pixel.color = PixelShading(pixel, mesh);
 						pixelColor = PixelShading(pixel, mesh, pixelColor);
 
 						switch (m_CurrentPixelColorState)
 						{
 						case dae::Renderer::PixelColorState::FinalColor:
-							//finalColor = pixel.color;
 							finalColor = pixelColor;
 							break;
 						case dae::Renderer::PixelColorState::DepthBuffer:
@@ -325,65 +328,49 @@ void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh)
 	}
 }
 
-bool dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, const Matrix& worldMatrix) const
+void dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, 
+	const Matrix& WVPMatrix, const Matrix& worldMatrix) const
 {
-	vertices_out.clear();
-	vertices_out.resize(vertices_in.size());
+	if (vertices_out.capacity() == 0)
+	{
+		vertices_out.reserve(vertices_in.size());
+	}
 
 	//const float cameraNear{ m_Camera.nearPlane };
 	//const float cameraFar{ m_Camera.farPlane };
 
-	// Precompute Matrices
-	const Matrix viewMatrix{ m_Camera.viewMatrix };
-	const Matrix projectionMatrix{ m_Camera.projectionMatrix };
-	const Matrix worldViewProjectionMatrix{ worldMatrix * viewMatrix * projectionMatrix };
-
 	for (size_t i{}; i < vertices_in.size(); ++i)
 	{
-		// ------- PROJECTION STAGE ---------
-		// Model -> World
-		const Vector3 worldPos = worldMatrix.TransformPoint(vertices_in[i].position);
+		// Model -> Clip
+		const Vector4 clipPos{ WVPMatrix.TransformPoint(Vector4(vertices_in[i].position, 1.f)) };
 
-		const Vector3 worldNormal = worldMatrix.TransformVector(vertices_in[i].normal).Normalized();
-		const Vector3 worldTangent = worldMatrix.TransformVector(vertices_in[i].tangent).Normalized();
-		const Vector3 viewDirection = (m_Camera.origin - worldPos).Normalized();
+		const float invW{ 1.f / clipPos.w };
 
-		// World → View
-		const Vector3 viewPos = viewMatrix.TransformPoint(worldPos);
+		// Perspective Divide
+		const Vector3 projectedPos{ Vector3(clipPos) * invW };
 
-		// View → Projection (clip space)
-		const Vector3 projectedVertex = projectionMatrix.TransformPoint(viewPos);
-
-		// Store original view-space Z for perspective-correct interpolation
-		const float w = viewPos.z;
-
-		// Perspective Divide → NDC
-		const float invW = 1.f / w;
-
-		Vector3 NdcVertex{ projectedVertex.x * invW, projectedVertex.y * invW, projectedVertex.z* invW };
-
-		// NDC → Screen space
-		vertices_out[i].position = Vector4 {
-			(NdcVertex.x + 1.f) * 0.5f * m_Width,
-			(1.f - NdcVertex.y) * 0.5f * m_Height,
-			NdcVertex.z,
-			invW        // Store 1/W for interpolation
+		// Perspective -> Screen
+		vertices_out[i].position = Vector4{ (projectedPos.x + 1.f) * 0.5f * m_Width,
+			(1.f - projectedPos.y) * 0.5f * m_Height,
+			projectedPos.z,
+			invW
 		};
 
 		vertices_out[i].UVCoordinate = vertices_in[i].UVCoordinate * invW;
 
-		vertices_out[i].normal = worldNormal;
-		vertices_out[i].tangent = worldTangent;
-		vertices_out[i].viewDirection = viewDirection;
+		// Model -> World
+		vertices_out[i].normal = worldMatrix.TransformVector(vertices_in[i].normal);
+		vertices_out[i].tangent = worldMatrix.TransformVector(vertices_in[i].tangent);
+		
+		const Vector3 worldPos{ worldMatrix.TransformPoint(vertices_in[i].position) };
+		vertices_out[i].viewDirection = Vector3{ m_Camera.origin - worldPos }.Normalized();
 	}
-
-	return true;
 }
 
 ColorRGB dae::Renderer::PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const
 {
 	ColorRGB finalShadedColor{};
-	const Vector3 lightDirection{ -Vector3{0.577f, -0.577f, 0.577f}.Normalized() }; // HAVE TO INVERT WHEN USING
+	const Vector3 lightDirection{ -Vector3{0.577f, -0.577f, 0.577f}.Normalized() }; // Inverted Light
 	constexpr float lightIntensity{ 1.f };
 
 	Vector3 finalNormal{ pixel.normal };

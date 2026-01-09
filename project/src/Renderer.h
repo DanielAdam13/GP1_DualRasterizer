@@ -30,7 +30,7 @@ namespace dae
 		Renderer& operator=(Renderer&&) noexcept = delete;
 
 		void Update(const Timer* pTimer);
-		void Render() const;
+		void Render();
 
 	private:
 		SDL_Window* m_pWindow{};
@@ -52,9 +52,10 @@ namespace dae
 
 		std::vector<VertexOut> m_TransformedMeshVertices{};
 
-		void RenderSoftwareMesh(const MeshBase& mesh);
+		void RenderSoftwareMesh(const MeshBase& mesh, const Matrix& viewProjMatrix);
 
-		bool VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, const Matrix& worldMatrix) const;
+		void VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, 
+			const Matrix& WVPMatrix, const Matrix& meshWorldMatrix) const;
 		ColorRGB PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const;
 
 		// --- HARDWARE ---
