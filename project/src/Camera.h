@@ -31,12 +31,16 @@ namespace dae
 		Matrix viewMatrix;
 		Matrix projectionMatrix;
 
+		float CameraRotationSpeed;
+		float initialCameraMoveSpeedMouse;
+		float initialCameraMoveSpeedKeys;
+
 		void Initialize(float _fovAngle = 90.f, Vector3 _origin = { 0.f,0.f,0.f }, float nearPlaneValue = 1.f, float farPlaneValue = 1000.f);
 
 		void CalculateViewMatrix();
 
 		void CalculateProjectionMatrix(float aspectRatio);
 
-		void Update(const Timer* pTimer, float aspectRatio);
+		void Update(const Timer* pTimer, float aspectRatio, const RasterizerState currentRasterizerState);
 	};
 }

@@ -132,7 +132,7 @@ void Renderer::Update(const Timer* pTimer)
 		}
 	}
 
-	m_Camera.Update(pTimer, aspectRatio);
+	m_Camera.Update(pTimer, aspectRatio, m_CurrentRasterizerState);
 	
 
 	if (m_CurrentRasterizerState == RasterizerState::Hardware)
@@ -249,24 +249,8 @@ void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh, const Matrix& viewP
 			m_TransformedMeshVertices[meshIndices[i + 1]],
 			m_TransformedMeshVertices[meshIndices[i + 2]] };
 
-		// --- INSIDE SCREEN CHECK ---
-		if (std::any_of(screenTri.begin(), screenTri.end(),
-			[&](const VertexOut& v) {
-				return v.position.x < 0.f || v.position.x >= m_Width ||
-					v.position.y < 0.f || v.position.y >= m_Height;
-			}))
-		{
+		if (!PassTriangleOptimizations(screenTri))
 			continue; // Skip triangle
-		}
-
-		// --- FRUSTRUM CULLING ---
-		if (std::any_of(screenTri.begin(), screenTri.end(),
-			[&](const VertexOut& v) {
-				return v.position.z < 0.f || v.position.z > 1.f;
-			}))
-		{
-			continue; // Skip triangle
-		}
 
 		// ---- Bounding Box -----
 		std::pair<int, int> topLeft{ static_cast<int>(std::floor(
@@ -386,6 +370,29 @@ void dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& ve
 	}
 }
 
+bool dae::Renderer::PassTriangleOptimizations(const std::array<VertexOut, 3> screenTri)
+{
+	// --- INSIDE SCREEN CHECK ---
+	if (std::any_of(screenTri.begin(), screenTri.end(),
+		[&](const VertexOut& v) {
+			return v.position.x < 0.f || v.position.x >= m_Width ||
+				v.position.y < 0.f || v.position.y >= m_Height;
+		}))
+	{
+		return false; // Skip triangle
+	}
+
+	// --- FRUSTRUM CULLING ---
+	if (std::any_of(screenTri.begin(), screenTri.end(),
+		[&](const VertexOut& v) {
+			return v.position.z < 0.f || v.position.z > 1.f;
+		}))
+	{
+		return false; // Skip triangle
+	}
+	return true;
+}
+
 ColorRGB dae::Renderer::PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const
 {
 	ColorRGB finalShadedColor{};
@@ -439,7 +446,7 @@ ColorRGB dae::Renderer::PixelShading(const VertexIn& pixel, const MeshBase& mesh
 	}
 
 	// Ambient Color
-	const float ambientStrength{ 0.03f };
+	constexpr float ambientStrength{ 0.025f };
 	const ColorRGB ambientColor{ lambertDiffuse * ambientStrength };
 	finalShadedColor += ambientColor;
 
@@ -519,7 +526,7 @@ HRESULT Renderer::InitializeDirectX()
 
 	if (selectedAdapter == nullptr)
 	{
-
+		std::wcout << L"No NVIDIA GPU found on machine\n";
 	}
 
 	result = D3D11CreateDevice(selectedAdapter, D3D_DRIVER_TYPE_UNKNOWN, 0, createDeviceFlag, &featureLevel,

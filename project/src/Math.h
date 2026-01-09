@@ -7,6 +7,13 @@
 #include "MathHelpers.h"
 
 #include "DataStructs.h"
+
+enum class RasterizerState
+{
+	Hardware = 0,
+	Software = 1
+};
+
 using namespace dae;
 
 inline bool IsPixelIn_Triangle(const std::array<VertexOut, 3>& screenTriangle, VertexIn& pixel, std::array<float, 3>& areaRatios)

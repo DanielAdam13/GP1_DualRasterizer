@@ -56,6 +56,9 @@ namespace dae
 
 		void VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, 
 			const Matrix& WVPMatrix, const Matrix& meshWorldMatrix) const;
+
+		bool PassTriangleOptimizations(const std::array<VertexOut, 3> screenTri);
+
 		ColorRGB PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const;
 
 		// --- HARDWARE ---

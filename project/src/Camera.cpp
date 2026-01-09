@@ -1,11 +1,6 @@
+#pragma once
 #include "Camera.h"
 #include <cmath>
-
-#pragma once
-
-constexpr float CameraRotationSpeed = dae::PI * 5.f;
-constexpr float CameraMoveSpeedMouse = 500.f;
-constexpr float CameraMoveSpeedKeys = 50.f;
 
 namespace dae
 {
@@ -22,7 +17,10 @@ namespace dae
 		totalYaw{},
 		invViewMatrix{},
 		viewMatrix{},
-		projectionMatrix{}
+		projectionMatrix{},
+		CameraRotationSpeed{ PI * 5.f },
+		initialCameraMoveSpeedMouse{ 500.f },
+		initialCameraMoveSpeedKeys{ 50.f }
 	{
 	}
 
@@ -39,7 +37,10 @@ namespace dae
 		totalYaw{},
 		invViewMatrix{},
 		viewMatrix{},
-		projectionMatrix{}
+		projectionMatrix{},
+		CameraRotationSpeed{ PI * 5.f },
+		initialCameraMoveSpeedMouse{ 500.f },
+		initialCameraMoveSpeedKeys{ 50.f }
 	{
 	}
 
@@ -56,6 +57,10 @@ namespace dae
 		forward = Vector3::UnitZ;
 		up = Vector3::UnitY;
 		right = Vector3::UnitX;
+
+		CameraRotationSpeed = dae::PI * 5.f;
+		initialCameraMoveSpeedMouse = 500.f;
+		initialCameraMoveSpeedKeys = 50.f;
 	}
 
 	void Camera::CalculateViewMatrix()
@@ -72,12 +77,40 @@ namespace dae
 		//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
 	}
 
-	void Camera::Update(const Timer* pTimer, float aspectRatio)
+	void Camera::Update(const Timer* pTimer, float aspectRatio, const RasterizerState currentRasterizerState)
 	{
 		const float deltaTime{ pTimer->GetElapsed() };
 
+		if (currentRasterizerState == RasterizerState::Software)
+		{
+#ifdef _DEBUG
+			CameraRotationSpeed = dae::PI / 60.f; // low fps in DEBUG mode
+			initialCameraMoveSpeedMouse = 1.f;
+			initialCameraMoveSpeedKeys = 5.f;
+#else
+			CameraRotationSpeed = dae::PI / 5.f;
+			initialCameraMoveSpeedMouse = 5.f;
+			initialCameraMoveSpeedKeys = 30.f;
+#endif
+		}
+		else
+		{
+			CameraRotationSpeed = dae::PI * 5.f;
+			initialCameraMoveSpeedMouse = 500.f;
+			initialCameraMoveSpeedKeys = 50.f;
+		}
+
+		float currentCameraMoveSpeedMouse{ initialCameraMoveSpeedMouse };
+		float currentCameraMoveSpeedKeys{ initialCameraMoveSpeedKeys };
+
 		//Keyboard Input
 		const uint8_t* pKeyboardState{ SDL_GetKeyboardState(nullptr) };
+
+		if (pKeyboardState[SDL_SCANCODE_LSHIFT])
+		{
+			currentCameraMoveSpeedMouse = initialCameraMoveSpeedMouse * 3;
+			currentCameraMoveSpeedKeys = initialCameraMoveSpeedKeys * 3;
+		}
 
 		//Mouse Input
 		int mouseX{}, mouseY{};
@@ -87,8 +120,7 @@ namespace dae
 
 		if (lmb && rmb)
 		{
-			//origin += static_cast<float>(mouseX) * CameraMoveSpeedMouse * right * deltaTime;
-			origin += static_cast<float>(-mouseY) * CameraMoveSpeedMouse * up * deltaTime;
+			origin += static_cast<float>(-mouseY) * currentCameraMoveSpeedMouse * up * deltaTime;
 		}
 		else if (rmb)
 		{
@@ -119,24 +151,24 @@ namespace dae
 			right = Vector3::Cross(Vector3::UnitY, forward);
 			right.Normalize();
 
-			origin += static_cast<float>(-mouseY) * CameraMoveSpeedMouse * forward * deltaTime;
+			origin += static_cast<float>(-mouseY) * currentCameraMoveSpeedMouse * forward * deltaTime;
 		}
 		// Change the origin depending on camera.forward
 		if (pKeyboardState[SDL_SCANCODE_W])
 		{
-			origin += CameraMoveSpeedKeys * forward * deltaTime;
+			origin += currentCameraMoveSpeedKeys * forward * deltaTime;
 		}
 		if (pKeyboardState[SDL_SCANCODE_S])
 		{
-			origin -= CameraMoveSpeedKeys * forward * deltaTime;
+			origin -= currentCameraMoveSpeedKeys * forward * deltaTime;
 		}
 		if (pKeyboardState[SDL_SCANCODE_D])
 		{
-			origin += CameraMoveSpeedKeys * right * deltaTime;
+			origin += currentCameraMoveSpeedKeys * right * deltaTime;
 		}
 		if (pKeyboardState[SDL_SCANCODE_A])
 		{
-			origin -= CameraMoveSpeedKeys * right * deltaTime;
+			origin -= currentCameraMoveSpeedKeys * right * deltaTime;
 		}
 
 		//Update Matrices

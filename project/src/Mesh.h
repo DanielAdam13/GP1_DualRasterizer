@@ -37,11 +37,7 @@ enum class SamplerType
 	Anisotropic = 2
 };
 
-enum class RasterizerState
-{
-	Hardware = 0,
-	Software = 1
-};
+
 
 template <typename EffectType>
 class Mesh final : public MeshBase
