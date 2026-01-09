@@ -98,14 +98,14 @@ public:
 		SAFE_RELEASE(m_pInputLayout);
 	}
 
-	void Render(RasterizerState currentRasterizerState, const Matrix& viewProjMatrix, Vector3& cameraPos, 
+	void Render(RasterizerMode currentRasterizerMode, const Matrix& viewProjMatrix, Vector3& cameraPos, 
 		ID3D11DeviceContext* pDeviceContext, ID3D11SamplerState* currentSamplerState)
 	{
 		// SHARED
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 
 		// HARDWARE
-		if (currentRasterizerState == RasterizerState::Hardware)
+		if (currentRasterizerMode == RasterizerMode::Hardware)
 		{
 			Matrix worldViewProjectionMatrix{ m_WorldMatrix * viewProjMatrix };
 			m_pEffect->GetWorldViewProjMatrix()->SetMatrix(reinterpret_cast<float*>(&worldViewProjectionMatrix));

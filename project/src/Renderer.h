@@ -41,7 +41,6 @@ namespace dae
 		Camera m_Camera{};
 		std::vector<std::unique_ptr<Mesh<ShadingEffect>>> m_OpaqueMeshes{};
 		std::vector<std::unique_ptr<Mesh<TransparencyEffect>>> m_TransparentMeshes{};
-		SamplerType m_CurrentSamplerType;
 
 		// --- SOFTWARE ---
 		SDL_Surface* m_pFrontBuffer{ nullptr };
@@ -74,7 +73,13 @@ namespace dae
 		ID3D11SamplerState* m_pAnisotropicSampler{};
 		ID3D11SamplerState* m_CurrentSampler{};
 
+		ID3D11RasterizerState* m_pRasterizerBack{};
+		ID3D11RasterizerState* m_pRasterizerFront{};
+		ID3D11RasterizerState* m_pRasterizerNone{};
+		ID3D11RasterizerState* m_pCurrentRasterizer{};
+
 		void CreateSamplerStates(ID3D11Device* pDevice);
+		void CreateRasterizerStates(ID3D11Device* pDevice);
 
 		//DIRECTX
 		HRESULT InitializeDirectX();
@@ -92,13 +97,18 @@ namespace dae
 		void ProcessInput();
 
 		// CONDITIONS
+		// --- SHARED ---
 		bool m_RotationFrozen;
 
-		RasterizerState m_CurrentRasterizerState;
-
-		bool m_ShowFireMesh;
+		RasterizerMode m_CurrentRasterizerMode;
 
 		bool m_UniformClearColorActive;
+
+		CullMode m_CurrentCullMode;
+		
+		// --- HARDWARE ---
+		bool m_ShowFireMesh;
+		SamplerType m_CurrentSamplerType;
 
 		// --- SOFTWARE ---
 		enum class LightingMode

@@ -77,11 +77,11 @@ namespace dae
 		//DirectX Implementation => https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxmatrixperspectivefovlh
 	}
 
-	void Camera::Update(const Timer* pTimer, float aspectRatio, const RasterizerState currentRasterizerState)
+	void Camera::Update(const Timer* pTimer, float aspectRatio, const RasterizerMode currentRasterizerState)
 	{
 		const float deltaTime{ pTimer->GetElapsed() };
 
-		if (currentRasterizerState == RasterizerState::Software)
+		if (currentRasterizerState == RasterizerMode::Software)
 		{
 #ifdef _DEBUG
 			CameraRotationSpeed = dae::PI / 60.f; // low fps in DEBUG mode

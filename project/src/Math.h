@@ -8,10 +8,17 @@
 
 #include "DataStructs.h"
 
-enum class RasterizerState
+enum class RasterizerMode
 {
 	Hardware = 0,
 	Software = 1
+};
+
+enum class CullMode
+{
+	None = 0,
+	Back = 1,
+	Front = 2
 };
 
 using namespace dae;

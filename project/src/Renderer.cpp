@@ -18,11 +18,12 @@ using namespace dae;
 
 Renderer::Renderer(SDL_Window* pWindow) :
 	m_pWindow(pWindow),
-	m_CurrentSamplerType{ SamplerType::Point },
 	m_RotationFrozen{ true },
-	m_CurrentRasterizerState{ RasterizerState::Hardware },
-	m_ShowFireMesh{ m_CurrentRasterizerState == RasterizerState::Hardware },
+	m_CurrentRasterizerMode{ RasterizerMode::Hardware },
 	m_UniformClearColorActive{ false },
+	m_CurrentCullMode{ CullMode::Back },
+	m_ShowFireMesh{ m_CurrentRasterizerMode == RasterizerMode::Hardware },
+	m_CurrentSamplerType{ SamplerType::Point },
 	m_CurrentLightingMode{ LightingMode::Combined },
 	m_ShowNormalMap{ true },
 	m_CurrentPixelColorState{ PixelColorState::FinalColor },
@@ -45,7 +46,10 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	if (result == S_OK)
 	{
 		m_IsDXInitialized = true;
+
 		CreateSamplerStates(m_pDevice);
+		CreateRasterizerStates(m_pDevice);
+
 		std::cout << "DirectX is initialized and ready!\n";
 	}
 	else
@@ -137,10 +141,25 @@ void Renderer::Update(const Timer* pTimer)
 		}
 	}
 
-	m_Camera.Update(pTimer, aspectRatio, m_CurrentRasterizerState);
+	m_Camera.Update(pTimer, aspectRatio, m_CurrentRasterizerMode);
+
+	switch (m_CurrentCullMode)
+	{
+	case CullMode::None:
+		m_pCurrentRasterizer = m_pRasterizerNone;
+		break;
+	case CullMode::Back:
+		m_pCurrentRasterizer = m_pRasterizerBack;
+		break;
+	case CullMode::Front:
+		m_pCurrentRasterizer = m_pRasterizerFront;
+		break;
+	}
+
+	//m_pDeviceContext->RSSetState(m_pCurrentRasterizer);
 	
 
-	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
 	{
 		switch (m_CurrentSamplerType)
 		{
@@ -165,7 +184,7 @@ void Renderer::Render()
 	Matrix viewProjMatrix{ m_Camera.viewMatrix * m_Camera.projectionMatrix };
 
 	// ------- START OF FRAME --------
-	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
 	{
 		constexpr float hardwareColor[4] = { 0.39f, 0.59f, 0.93f, 1.f };
 		constexpr float uniformHardwareClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.f };
@@ -201,22 +220,22 @@ void Renderer::Render()
 	// Draw Opaque Meshes first
 	for (auto& pOpaqMesh : m_OpaqueMeshes)
 	{
-		pOpaqMesh->Render(m_CurrentRasterizerState, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
+		pOpaqMesh->Render(m_CurrentRasterizerMode, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
 
 		// After World Matrix calculations in Mesh::Render
-		if (m_CurrentRasterizerState == RasterizerState::Software)
+		if (m_CurrentRasterizerMode == RasterizerMode::Software)
 		{
 			RenderSoftwareMesh(*pOpaqMesh, viewProjMatrix);
 		}
 	}
 	// Draw Transparent Meshes AFTER
-	if (m_CurrentRasterizerState == RasterizerState::Hardware && m_ShowFireMesh)
+	if (m_CurrentRasterizerMode == RasterizerMode::Hardware && m_ShowFireMesh)
 	{
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
-			pTrMesh->Render(RasterizerState::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
+			pTrMesh->Render(RasterizerMode::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
 
-			/*if (m_CurrentRasterizerState == RasterizerState::Software)
+			/*if (m_CurrentRasterizerMode == RasterizerMode::Software)
 			{
 				RenderSoftwareMesh(*pTrMesh);
 			}*/
@@ -224,7 +243,7 @@ void Renderer::Render()
 	}
 
 	// -------- END OF FRAME --------
-	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
 	{
 		// Present BackBuffer (SWAP)
 		m_pSwapChain->Present(0, 0);
@@ -529,6 +548,26 @@ void dae::Renderer::CreateSamplerStates(ID3D11Device* pDevice)
 	pDevice->CreateSamplerState(&desc, &m_pAnisotropicSampler);
 }
 
+void dae::Renderer::CreateRasterizerStates(ID3D11Device* pDevice)
+{
+	D3D11_RASTERIZER_DESC desc{};
+	desc.FillMode = D3D11_FILL_SOLID;
+	desc.FrontCounterClockwise = false; // depends on your winding order
+	desc.DepthClipEnable = true;
+
+	// Back-face culling
+	desc.CullMode = D3D11_CULL_BACK;
+	pDevice->CreateRasterizerState(&desc, &m_pRasterizerBack);
+
+	// Front-face culling
+	desc.CullMode = D3D11_CULL_FRONT;
+	pDevice->CreateRasterizerState(&desc, &m_pRasterizerFront);
+
+	// No culling
+	desc.CullMode = D3D11_CULL_NONE;
+	pDevice->CreateRasterizerState(&desc, &m_pRasterizerNone);
+}
+
 HRESULT Renderer::InitializeDirectX()
 {
 	// 1. ----- Create Device and Device Context -----
@@ -666,8 +705,8 @@ void dae::Renderer::ProcessInput()
 
 	if (wasF1Pressed && !isF1Pressed)
 	{
-		m_CurrentRasterizerState = static_cast<RasterizerState>((static_cast<int>(m_CurrentRasterizerState) + 1) % 2);
-		std::wcout << "RASTERIZER STATE: " << std::to_wstring(static_cast<int>(m_CurrentRasterizerState)) << "\n";
+		m_CurrentRasterizerMode = static_cast<RasterizerMode>((static_cast<int>(m_CurrentRasterizerMode) + 1) % 2);
+		std::wcout << L"RASTERIZER STATE: " << std::to_wstring(static_cast<int>(m_CurrentRasterizerMode)) << "\n";
 	}
 	wasF1Pressed = isF1Pressed;
 
@@ -691,8 +730,19 @@ void dae::Renderer::ProcessInput()
 	}
 	wasF10Pressed = isF10Pressed;
 
+	// Cull Mode
+	static bool wasF9Pressed{ false };
+	bool isF9Pressed = pKeyboardState[SDL_SCANCODE_F9];
+
+	if (wasF9Pressed && !isF9Pressed)
+	{
+		m_CurrentCullMode = static_cast<CullMode>((static_cast<int>(m_CurrentCullMode) + 1) % 3);
+		std::wcout << L"CULL MODE: " << std::to_wstring(static_cast<int>(m_CurrentCullMode)) << "\n";
+	}
+	wasF9Pressed = isF9Pressed;
+
 	// ------ HARDWARE ------
-	if (m_CurrentRasterizerState == RasterizerState::Hardware)
+	if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
 	{
 		// Toggle FireFX Mesh
 		static bool wasF3Pressed{ false };
@@ -711,7 +761,7 @@ void dae::Renderer::ProcessInput()
 		if (wasF4Pressed && !isF4Pressed)
 		{
 			m_CurrentSamplerType = static_cast<SamplerType>((static_cast<int>(m_CurrentSamplerType) + 1) % 3);
-			std::wcout << "Sampler State: " << std::to_wstring(static_cast<int>(m_CurrentSamplerType)) << "\n";
+			std::wcout << L"Sampler State: " << std::to_wstring(static_cast<int>(m_CurrentSamplerType)) << "\n";
 		}
 		wasF4Pressed = isF4Pressed;
 	}

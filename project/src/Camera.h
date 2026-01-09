@@ -41,6 +41,6 @@ namespace dae
 
 		void CalculateProjectionMatrix(float aspectRatio);
 
-		void Update(const Timer* pTimer, float aspectRatio, const RasterizerState currentRasterizerState);
+		void Update(const Timer* pTimer, float aspectRatio, const RasterizerMode currentRasterizerState);
 	};
 }
