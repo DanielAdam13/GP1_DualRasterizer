@@ -152,8 +152,6 @@ void Renderer::Update(const Timer* pTimer)
 		m_pCurrentRasterizer = m_pRasterizerFront;
 		break;
 	}
-
-	//m_pDeviceContext->RSSetState(m_pCurrentRasterizer);
 	
 
 	if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
@@ -524,7 +522,11 @@ void dae::Renderer::ProcessInput()
 	if (wasF1Pressed && !isF1Pressed)
 	{
 		m_CurrentRasterizerMode = static_cast<RasterizerMode>((static_cast<int>(m_CurrentRasterizerMode) + 1) % 2);
-		std::wcout << L"RASTERIZER STATE: " << std::to_wstring(static_cast<int>(m_CurrentRasterizerMode)) << "\n";
+
+		if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
+			std::wcout << L"RASTERIZER MODE = HARDWARE\n";
+		else
+			std::wcout << L"RASTERIZER MODE = SOFTWARE\n";
 	}
 	wasF1Pressed = isF1Pressed;
 
@@ -535,6 +537,11 @@ void dae::Renderer::ProcessInput()
 	if (wasF2Pressed && !isF2Pressed)
 	{
 		m_RotationFrozen = !m_RotationFrozen;
+
+		if (m_RotationFrozen)
+			std::wcout << L"Vehicle Rotation OFF\n";
+		else
+			std::wcout << L"Vehicle Rotation ON\n";
 	}
 	wasF2Pressed = isF2Pressed;
 
@@ -545,6 +552,11 @@ void dae::Renderer::ProcessInput()
 	if (wasF10Pressed && !isF10Pressed)
 	{
 		m_UniformClearColorActive = !m_UniformClearColorActive;
+
+		if (m_UniformClearColorActive)
+			std::wcout << L"Uniform ClearColor ON\n";
+		else
+			std::wcout << L"Uniform ClearColor OFF\n";
 	}
 	wasF10Pressed = isF10Pressed;
 
@@ -555,21 +567,19 @@ void dae::Renderer::ProcessInput()
 	if (wasF9Pressed && !isF9Pressed)
 	{
 		m_CurrentCullMode = static_cast<CullMode>((static_cast<int>(m_CurrentCullMode) + 1) % 3);
-		std::wstring cullModeText{};
 
 		switch (m_CurrentCullMode)
 		{
 		case CullMode::None:
-			cullModeText = L"NONE";
+			std::wcout << L"CULL MODE: NONE\n";
 			break;
 		case CullMode::Back:
-			cullModeText = L"BACK";
+			std::wcout << L"CULL MODE: BACK\n";
 			break;
 		case CullMode::Front:
-			cullModeText = L"FRONT";
+			std::wcout << L"CULL MODE: FRONT\n";
 			break;
 		}
-		std::wcout << L"CULL MODE: " << cullModeText << "\n";
 	}
 	wasF9Pressed = isF9Pressed;
 
@@ -583,6 +593,11 @@ void dae::Renderer::ProcessInput()
 		if (wasF3Pressed && !isF3Pressed)
 		{
 			m_ShowFireMesh = !m_ShowFireMesh;
+
+			if (m_ShowFireMesh)
+				std::wcout << L"FireFX ON\n";
+			else
+				std::wcout << L"FireFX OFF\n";
 		}
 		wasF3Pressed = isF3Pressed;
 
@@ -593,7 +608,19 @@ void dae::Renderer::ProcessInput()
 		if (wasF4Pressed && !isF4Pressed)
 		{
 			m_CurrentSamplerType = static_cast<SamplerType>((static_cast<int>(m_CurrentSamplerType) + 1) % 3);
-			std::wcout << L"Sampler State: " << std::to_wstring(static_cast<int>(m_CurrentSamplerType)) << "\n";
+
+			switch (m_CurrentSamplerType)
+			{
+			case SamplerType::Point:
+				std::wcout << L"Sampler Filter = POINT\n";
+				break;
+			case SamplerType::Linear:
+				std::wcout << L"Sampler Filter = LINEAR\n";
+				break;
+			case SamplerType::Anisotropic:
+				std::wcout << L"Sampler Filter = ANISOTROPIC\n";
+				break;
+			}
 		}
 		wasF4Pressed = isF4Pressed;
 	}
@@ -611,6 +638,22 @@ void dae::Renderer::ProcessInput()
 			{
 				m_CurrentLightingMode = LightingMode::ObservedArea;
 			}
+
+			switch (m_CurrentLightingMode)
+			{
+			case dae::Renderer::LightingMode::ObservedArea:
+				std::wcout << L"Shading Mode = OBSERVED_AREA\n";
+				break;
+			case dae::Renderer::LightingMode::Diffuse:
+				std::wcout << L"Shading Mode = DIFFUSE\n";
+				break;
+			case dae::Renderer::LightingMode::Specular:
+				std::wcout << L"Shading Mode = SPECULAR\n";
+				break;
+			case dae::Renderer::LightingMode::Combined:
+				std::wcout << L"Shading Mode = COMBINED\n";
+				break;
+			}
 		}
 		wasF5Pressed = isF5Pressed;
 
@@ -621,6 +664,11 @@ void dae::Renderer::ProcessInput()
 		if (wasF6Pressed && !isF6Pressed)
 		{
 			m_ShowNormalMap = !m_ShowNormalMap;
+
+			if (m_ShowNormalMap)
+				std::wcout << L"NormalMap ON\n";
+			else
+				std::wcout << L"NormalMap OFF\n";
 		}
 		wasF6Pressed = isF6Pressed;
 
@@ -636,6 +684,16 @@ void dae::Renderer::ProcessInput()
 			{
 				m_CurrentPixelColorState = PixelColorState::FinalColor;
 			}
+
+			switch (m_CurrentPixelColorState)
+			{
+			case dae::Renderer::PixelColorState::FinalColor:
+				std::wcout << L"DepthBuffer Visualization OFF\n";
+				break;
+			case dae::Renderer::PixelColorState::DepthBuffer:
+				std::wcout << L"DepthBuffer Visualization ON\n";
+				break;
+			}
 		}
 		wasF7Pressed = isF7Pressed;
 
@@ -646,8 +704,12 @@ void dae::Renderer::ProcessInput()
 		if (wasF8Pressed && !isF8Pressed)
 		{
 			m_ShowBoundingBox = !m_ShowBoundingBox;
+
+			if (m_ShowBoundingBox)
+				std::wcout << L"BoundingBox Visualization ON\n";
+			else 
+				std::wcout << L"BoundingBox Visualization OFF\n";
 		}
 		wasF8Pressed = isF8Pressed;
 	}
-	
 }

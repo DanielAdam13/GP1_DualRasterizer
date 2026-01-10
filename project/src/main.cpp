@@ -75,6 +75,11 @@ int main(int argc, char* args[])
 				if (e.key.keysym.scancode == SDL_SCANCODE_F11)
 				{
 					isPrintingFPS = !isPrintingFPS;
+
+					if (isPrintingFPS)
+						std::wcout << L"Print FPS ON\n";
+					else
+						std::wcout << L"Print FPS OFF\n";
 				}
 				break;
 			default: 

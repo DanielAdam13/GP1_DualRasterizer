@@ -143,19 +143,19 @@ float4 PS(VS_OUTPUT input) : SV_Target
 // -------------------------
 RasterizerState gRasterizerStateBack
 {
-    CullMode = Back; // Backface culling for opaque meshes
+    CullMode = Back;
     FrontCounterClockwise = false;
 };
 
 RasterizerState gRasterizerStateNone
 {
-    CullMode = None; // Backface culling for opaque meshes
+    CullMode = None;
     FrontCounterClockwise = false;
 };
 
 RasterizerState gRasterizerStateFront
 {
-    CullMode = Front; // Backface culling for opaque meshes
+    CullMode = Front;
     FrontCounterClockwise = false;
 };
 

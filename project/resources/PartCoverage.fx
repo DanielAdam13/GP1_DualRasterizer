@@ -62,7 +62,7 @@ float4 PS(VS_OUTPUT input) : SV_Target
 // -------------------------
 RasterizerState gRasterizerState
 {
-    CullMode = None; // Double-sided
+    CullMode = None; // Double-sided for Transparent Meshes
     FrontCounterClockwise = false;
 };
 

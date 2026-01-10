@@ -143,17 +143,19 @@ public:
 			D3DX11_TECHNIQUE_DESC techDesc{};
 			m_pEffect->GetTechnique()->GetDesc(&techDesc);
 
-			int passNumber{};
-
+			/*int passNumber{};
 			if constexpr (std::is_same_v<EffectType, OpaqueEffect>)
 			{
 				passNumber = static_cast<int>(currentCullMode);
 			}
-			
-			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(passNumber); // Technique has only one pass
-			pass->Apply(0, pDeviceContext);
 
-			//pDeviceContext->RSSetState(rasterizerState);
+			if constexpr (std::is_same_v<EffectType, TransparencyEffect>)
+			{
+				passNumber = 0;
+			}*/
+			
+			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(0); // Technique switches passes (for cull mode)
+			pass->Apply(0, pDeviceContext);
 
 			// ----- Bind Variables AFTER Technique pass ------
 			pDeviceContext->PSSetSamplers(0, 1, &currentSamplerState);
