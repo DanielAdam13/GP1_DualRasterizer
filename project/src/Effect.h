@@ -29,7 +29,7 @@ public:
 		Transparent
 	};
 	
-	// ShadingEffect No-op Functions
+	// OpaqueEffect No-op Functions
 	virtual ID3DX11EffectMatrixVariable* GetWorldMatrix() const { return nullptr; };
 	virtual ID3DX11EffectVectorVariable* GetCameraPos() const { return nullptr; };
 

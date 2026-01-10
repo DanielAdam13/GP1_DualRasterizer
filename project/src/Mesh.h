@@ -5,7 +5,7 @@
 #include <d3dcompiler.h>
 #include <d3dx11effect.h>
 
-#include "Math.h" // Includes dae structs + DataStructs
+#include "Math.h" // Includes dae structs + DataStructs + important enum classes
 #include <vector>
 
 #include "Effect.h"
@@ -16,8 +16,6 @@
 #include <string>
 #include <memory>
 #include "Utils.h"
-
-#include "MeshBase.h"
 
 #define SAFE_RELEASE(p) \
 if (p) {p->Release(); p = nullptr; }
@@ -37,10 +35,8 @@ enum class SamplerType
 	Anisotropic = 2
 };
 
-
-
 template <typename EffectType>
-class Mesh final : public MeshBase
+class Mesh final
 {
 public:
 	static_assert(
@@ -99,7 +95,7 @@ public:
 	}
 
 	void Render(RasterizerMode currentRasterizerMode, const Matrix& viewProjMatrix, Vector3& cameraPos, 
-		ID3D11DeviceContext* pDeviceContext, ID3D11SamplerState* currentSamplerState)
+		ID3D11DeviceContext* pDeviceContext, ID3D11SamplerState* currentSamplerState, CullMode currentCullMode)
 	{
 		// SHARED
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
@@ -147,8 +143,17 @@ public:
 			D3DX11_TECHNIQUE_DESC techDesc{};
 			m_pEffect->GetTechnique()->GetDesc(&techDesc);
 
-			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(0); // Technique has only one pass
+			int passNumber{};
+
+			if constexpr (std::is_same_v<EffectType, OpaqueEffect>)
+			{
+				passNumber = static_cast<int>(currentCullMode);
+			}
+			
+			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(passNumber); // Technique has only one pass
 			pass->Apply(0, pDeviceContext);
+
+			//pDeviceContext->RSSetState(rasterizerState);
 
 			// ----- Bind Variables AFTER Technique pass ------
 			pDeviceContext->PSSetSamplers(0, 1, &currentSamplerState);
@@ -185,37 +190,37 @@ public:
 	};
 
 	// Getters
-	virtual Matrix GetWorldMatrix() const override
+	Matrix GetWorldMatrix() const 
 	{
 		return m_WorldMatrix;
 	};
 
-	virtual const std::vector<VertexIn>& GetVertices() const override
+	const std::vector<VertexIn>& GetVertices() const 
 	{
 		return m_Vertices;
 	}
 
-	virtual const std::vector<uint32_t>& GetIndices() const override
+	const std::vector<uint32_t>& GetIndices() const 
 	{
 		return m_Indices;
 	}
 
-	virtual const Texture* GetDiffuseTexture() const
+	const Texture* GetDiffuseTexture() const
 	{
 		return m_pDiffuseTexture.get();
 	};
 
-	virtual const Texture* GetNormalTexture() const
+	const Texture* GetNormalTexture() const
 	{
 		return m_pNormalTexture.get();
 	};
 
-	virtual const Texture* GetSpecularTexture() const
+	const Texture* GetSpecularTexture() const
 	{
 		return m_pSpecularTexture.get();
 	};
 
-	virtual const Texture* GetGlossTexture() const 
+	const Texture* GetGlossTexture() const 
 	{
 		return m_pGlossTexture.get();
 	};

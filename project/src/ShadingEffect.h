@@ -1,14 +1,14 @@
 #pragma once
 #include "Effect.h"
 
-class ShadingEffect final : public Effect
+class OpaqueEffect final : public Effect
 {
 public:
-	explicit ShadingEffect(ID3D11Device* pDevice);
-	ShadingEffect(ShadingEffect& other) = delete;
-	ShadingEffect(const ShadingEffect& other) = delete;
-	ShadingEffect(ShadingEffect&& effect) = delete;
-	virtual ~ShadingEffect() noexcept;
+	explicit OpaqueEffect(ID3D11Device* pDevice);
+	OpaqueEffect(OpaqueEffect& other) = delete;
+	OpaqueEffect(const OpaqueEffect& other) = delete;
+	OpaqueEffect(OpaqueEffect&& effect) = delete;
+	virtual ~OpaqueEffect() noexcept;
 	
 	virtual ID3DX11EffectMatrixVariable* GetWorldMatrix() const override;
 	virtual ID3DX11EffectVectorVariable* GetCameraPos() const override;

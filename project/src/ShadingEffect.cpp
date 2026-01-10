@@ -3,7 +3,7 @@
 #include <sstream> // string stream for wstringstream
 #include "Texture.h"
 
-ShadingEffect::ShadingEffect(ID3D11Device* pDevice)
+OpaqueEffect::OpaqueEffect(ID3D11Device* pDevice)
 	: Effect::Effect(pDevice, L"resources/PosCol3D.fx")
 {
 	m_pNormalMapVairable = m_pEffect->GetVariableByName("gNormalMap")->AsShaderResource();
@@ -42,9 +42,9 @@ ShadingEffect::ShadingEffect(ID3D11Device* pDevice)
 	}
 }
 
-ShadingEffect::~ShadingEffect()
+OpaqueEffect::~OpaqueEffect()
 {
-	// Variables owned by ShadingEffect => no need to release
+	// Variables owned by OpaqueEffect => no need to release
 	if (m_pWorldMatrixVariable)
 		m_pWorldMatrixVariable = nullptr;
 
@@ -61,17 +61,17 @@ ShadingEffect::~ShadingEffect()
 		m_pGlossMapVairable = nullptr;
 }
 
-ID3DX11EffectMatrixVariable* ShadingEffect::GetWorldMatrix() const
+ID3DX11EffectMatrixVariable* OpaqueEffect::GetWorldMatrix() const
 {
 	return m_pWorldMatrixVariable;
 }
 
-ID3DX11EffectVectorVariable* ShadingEffect::GetCameraPos() const
+ID3DX11EffectVectorVariable* OpaqueEffect::GetCameraPos() const
 {
 	return m_pCameraPosVariable;
 }
 
-void ShadingEffect::SetNormalMap(Texture* pNormalTexture)
+void OpaqueEffect::SetNormalMap(Texture* pNormalTexture)
 {
 	if (m_pNormalMapVairable && pNormalTexture)
 	{
@@ -79,7 +79,7 @@ void ShadingEffect::SetNormalMap(Texture* pNormalTexture)
 	}
 }
 
-void ShadingEffect::SetSpecularMap(Texture* pSpecularTexture)
+void OpaqueEffect::SetSpecularMap(Texture* pSpecularTexture)
 {
 	if (m_pSpecularMapVairable && pSpecularTexture)
 	{
@@ -87,7 +87,7 @@ void ShadingEffect::SetSpecularMap(Texture* pSpecularTexture)
 	}
 }
 
-void ShadingEffect::SetGlossMap(Texture* pGlossTexture)
+void OpaqueEffect::SetGlossMap(Texture* pGlossTexture)
 {
 	if (m_pGlossMapVairable && pGlossTexture)
 	{

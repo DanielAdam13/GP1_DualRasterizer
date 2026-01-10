@@ -141,9 +141,21 @@ float4 PS(VS_OUTPUT input) : SV_Target
 // -------------------------
 //   Technique
 // -------------------------
-RasterizerState gRasterizerState
+RasterizerState gRasterizerStateBack
 {
     CullMode = Back; // Backface culling for opaque meshes
+    FrontCounterClockwise = false;
+};
+
+RasterizerState gRasterizerStateNone
+{
+    CullMode = None; // Backface culling for opaque meshes
+    FrontCounterClockwise = false;
+};
+
+RasterizerState gRasterizerStateFront
+{
+    CullMode = Front; // Backface culling for opaque meshes
     FrontCounterClockwise = false;
 };
 
@@ -165,11 +177,31 @@ technique11 DefaultTechnique
 {
     pass P0
     {
-        SetRasterizerState(gRasterizerState);
+        SetRasterizerState(gRasterizerStateNone);
         SetDepthStencilState(gDepthStencilState, 0);
         SetBlendState(gBlendState, float4(0.f, 0.f, 0.f, 0.f), 0xFFFFFFFF);
         SetVertexShader( CompileShader( vs_5_0, VS() ) );
         SetGeometryShader( NULL );
+        SetPixelShader(CompileShader(ps_5_0, PS()));
+    }
+
+    pass P1
+    {
+        SetRasterizerState(gRasterizerStateBack);
+        SetDepthStencilState(gDepthStencilState, 0);
+        SetBlendState(gBlendState, float4(0.f, 0.f, 0.f, 0.f), 0xFFFFFFFF);
+        SetVertexShader(CompileShader(vs_5_0, VS()));
+        SetGeometryShader(NULL);
+        SetPixelShader(CompileShader(ps_5_0, PS()));
+    }
+
+    pass P2
+    {
+        SetRasterizerState(gRasterizerStateFront);
+        SetDepthStencilState(gDepthStencilState, 0);
+        SetBlendState(gBlendState, float4(0.f, 0.f, 0.f, 0.f), 0xFFFFFFFF);
+        SetVertexShader(CompileShader(vs_5_0, VS()));
+        SetGeometryShader(NULL);
         SetPixelShader(CompileShader(ps_5_0, PS()));
     }
 }

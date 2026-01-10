@@ -38,8 +38,8 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	m_pBackBuffer = SDL_CreateRGBSurface(0, m_Width, m_Height, 32, 0, 0, 0, 0);
 	m_pBackBufferPixels = (uint32_t*)m_pBackBuffer->pixels;
 
-	m_pDepthBufferPixels = new float[m_Width * m_Height];
-	std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max()); // Depth buffer elements are initalized with float max
+	m_pDepthBufferPixels = std::make_unique<float[]>(m_Width * m_Height);
+	std::fill_n(m_pDepthBufferPixels.get(), m_Width * m_Height, std::numeric_limits<float>::max()); // Depth buffer elements are initalized with float max
 
 	// Initialize DirectX pipeline
 	const HRESULT result = InitializeDirectX();
@@ -62,7 +62,7 @@ Renderer::Renderer(SDL_Window* pWindow) :
 
 	// Initial Mesh costructor doesn't care about Software or Hardware states
 	m_OpaqueMeshes.reserve(2);
-	m_OpaqueMeshes.emplace_back(std::make_unique<Mesh<ShadingEffect>>(
+	m_OpaqueMeshes.emplace_back(std::make_unique<Mesh<OpaqueEffect>>(
 		m_pDevice,
 		"resources/vehicle.obj",
 		PrimitiveTopology::TriangleList,
@@ -91,9 +91,6 @@ Renderer::~Renderer()
 {
 	SDL_DestroyWindow(m_pWindow);
 	m_pWindow = nullptr;
-
-	// --- SOFTWARE ---
-	delete[] m_pDepthBufferPixels;
 
 	// --- HARDWARE ---
 	// 1. Unbind Render Target view and Depth Stencil view from Device Context
@@ -203,7 +200,7 @@ void Renderer::Render()
 		// START SDL
 		SDL_LockSurface(m_pBackBuffer);
 
-		std::fill_n(m_pDepthBufferPixels, m_Width * m_Height, std::numeric_limits<float>::max());
+		std::fill_n(m_pDepthBufferPixels.get(), m_Width * m_Height, std::numeric_limits<float>::max());
 
 		// CLEAR THE BUFFER
 		SDL_FillRect(
@@ -220,7 +217,7 @@ void Renderer::Render()
 	// Draw Opaque Meshes first
 	for (auto& pOpaqMesh : m_OpaqueMeshes)
 	{
-		pOpaqMesh->Render(m_CurrentRasterizerMode, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
+		pOpaqMesh->Render(m_CurrentRasterizerMode, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler, m_CurrentCullMode);
 
 		// After World Matrix calculations in Mesh::Render
 		if (m_CurrentRasterizerMode == RasterizerMode::Software)
@@ -233,11 +230,11 @@ void Renderer::Render()
 	{
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
-			pTrMesh->Render(RasterizerMode::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler);
+			pTrMesh->Render(RasterizerMode::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler, m_CurrentCullMode);
 
 			/*if (m_CurrentRasterizerMode == RasterizerMode::Software)
 			{
-				RenderSoftwareMesh(*pTrMesh);
+				RenderSoftwareMesh(*pTrMesh, viewProjMatrix);
 			}*/
 		}
 	}
@@ -255,109 +252,6 @@ void Renderer::Render()
 		SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
 		SDL_UpdateWindowSurface(m_pWindow);
 	}
-}
-
-void dae::Renderer::RenderSoftwareMesh(const MeshBase& mesh, const Matrix& viewProjMatrix)
-{
-	Matrix worldViewProjectionMatrix{ mesh.GetWorldMatrix() * viewProjMatrix };
-
-	m_TransformedMeshVertices.clear();
-
-	VertexTransformationFunction(mesh.GetVertices(), m_TransformedMeshVertices, worldViewProjectionMatrix, mesh.GetWorldMatrix());
-
-	const auto& meshIndices{ mesh.GetIndices() };
-
-	for (size_t i{}; i < meshIndices.size(); i += 3)
-	{
-		std::array<VertexOut, 3> screenTri{ m_TransformedMeshVertices[meshIndices[i]],
-			m_TransformedMeshVertices[meshIndices[i + 1]],
-			m_TransformedMeshVertices[meshIndices[i + 2]] };
-
-		if (!PassTriangleOptimizations(screenTri))
-			continue; // Skip triangle
-
-		// ---- Bounding Box -----
-		std::pair<int, int> topLeft{ static_cast<int>(std::floor(
-			std::min({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
-			static_cast<int>(std::floor(
-				std::min({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
-		topLeft.first = std::max(topLeft.first, 0);
-		topLeft.second = std::max(topLeft.second, 0);
-
-		std::pair<int, int> bottomRight{ static_cast<int>(std::ceil(
-			std::max({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
-			static_cast<int>(std::ceil(
-				std::max({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
-		bottomRight.first = std::min(bottomRight.first, m_Width - 1);
-		bottomRight.second = std::min(bottomRight.second, m_Height - 1);
-
-		if (m_ShowBoundingBox)
-		{
-			FillRectangle(topLeft.first, topLeft.second, bottomRight.first, bottomRight.second, ColorRGB{ 1.f, 1.f, 1.f });
-		}
-		else
-		{
-			// PIXEL LOOP - Bounding Box
-			for (int px{ topLeft.first }; px <= bottomRight.first; ++px)
-			{
-				for (int py{ int(topLeft.second) }; py <= bottomRight.second; ++py)
-				{
-					ColorRGB finalColor{};
-
-					VertexIn pixel{ Vector3{ static_cast<float>(px) + 0.5f,
-						static_cast<float>(py) + 0.5f, 1.f} }; // We check from the center of the pixel, hence +0.5f
-
-					std::array<float, 3> triangleAreaRatios;
-
-					// INSIDE - OUTSIDE TEST + Depth Interpolation
-					bool pixelInTriangle{ IsPixelIn_Triangle(screenTri, pixel, triangleAreaRatios) };
-
-					if (pixelInTriangle)
-					{
-						//if (pixel.position.z < 0.f || pixel.position.z > 1.f) // Frustrum culling early out
-						//	continue;
-
-						int currentPixelNr{ GetPixelNumber(px, py, m_Width) };
-
-						// Depth Test
-						if (pixel.position.z < m_pDepthBufferPixels[currentPixelNr])
-						{
-							// Depth Write
-							m_pDepthBufferPixels[currentPixelNr] = pixel.position.z;
-
-							// UV, Normal, Tangent, ViewDirection Interpolation
-							InterpolateVertex(triangleAreaRatios, screenTri, pixel);
-
-							ColorRGB pixelColor{ mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate) };
-
-							// ----- SHADING -----
-							pixelColor = PixelShading(pixel, mesh, pixelColor);
-
-							switch (m_CurrentPixelColorState)
-							{
-							case dae::Renderer::PixelColorState::FinalColor:
-								finalColor = pixelColor;
-								break;
-							case dae::Renderer::PixelColorState::DepthBuffer:
-								ColorRGB depthValue{ RemapValue(pixel.position.z, 0.997f) };
-								finalColor = depthValue;
-								break;
-							}
-
-							// ---- Render only if overwriting pixel ----
-							//Update Color in Buffer
-							finalColor.MaxToOne();
-
-							m_pBackBufferPixels[currentPixelNr] = SDL_MapRGB(m_pBackBuffer->format,
-								static_cast<uint8_t>(finalColor.r * 255),
-								static_cast<uint8_t>(finalColor.g * 255),
-								static_cast<uint8_t>(finalColor.b * 255));
-						}
-					}
-				}
-			}
-		}
-	}	
 }
 
 void dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, 
@@ -422,82 +316,6 @@ bool dae::Renderer::PassTriangleOptimizations(const std::array<VertexOut, 3> scr
 		return false; // Skip triangle
 	}
 	return true;
-}
-
-ColorRGB dae::Renderer::PixelShading(const VertexIn& pixel, const MeshBase& mesh, const ColorRGB& pixelColor) const
-{
-	ColorRGB finalShadedColor{};
-	const Vector3 lightDirection{ -Vector3{0.577f, -0.577f, 0.577f}.Normalized() }; // Inverted Light
-	constexpr float lightIntensity{ 1.f };
-
-	Vector3 finalNormal{ pixel.normal };
-
-	// Normal Map Sampling
-	if (mesh.GetNormalTexture() && m_ShowNormalMap)
-	{
-		const Vector3 binormal{ Vector3::Cross(pixel.normal, pixel.tangent) };
-
-		// Tangent -> World
-		const Matrix tangentSpaceMatrix{ pixel.tangent, binormal, pixel.normal, {} };
-
-		const ColorRGB sampledNormalColor{ mesh.GetNormalTexture()->Sample(pixel.UVCoordinate)};
-
-		const Vector3 tangentSpaceNormal{
-			sampledNormalColor.r * 2.f - 1.f,
-			sampledNormalColor.g * 2.f - 1.f,
-			sampledNormalColor.b * 2.f - 1.f
-		};
-
-		// Tangent Space to World Space
-		finalNormal = tangentSpaceMatrix.TransformVector(tangentSpaceNormal).Normalized();
-	}
-
-	// Lambert Diffuse
-	const float cosTheta{ std::min(1.f, std::max(0.f, Vector3::Dot(lightDirection, finalNormal))) };
-	const ColorRGB lambertDiffuse{ pixelColor };
-	
-
-	const ColorRGB lambertColor(GetLambertColor(lambertDiffuse, cosTheta) * lightIntensity);
-
-	// Specular Color
-	ColorRGB specularColor{ colors::Black };
-	if (m_CurrentLightingMode == LightingMode::Specular || m_CurrentLightingMode == LightingMode::Combined)
-	{
-		if (mesh.GetSpecularTexture() && mesh.GetGlossTexture())
-		{
-			const ColorRGB sampledSpecular{ mesh.GetSpecularTexture()->Sample(pixel.UVCoordinate) };
-			const ColorRGB sampledGlossiness{ mesh.GetGlossTexture()->Sample(pixel.UVCoordinate) };
-
-			constexpr float shininess{ 25.f };
-			const float phongExponent{ sampledGlossiness.r * shininess };
-
-			specularColor = Phong(sampledSpecular, sampledSpecular.r, phongExponent,
-				lightDirection, pixel.viewDirection.Normalized(), finalNormal) * lightIntensity;
-		}
-	}
-
-	// Ambient Color
-	constexpr float ambientStrength{ 0.025f };
-	const ColorRGB ambientColor{ lambertDiffuse * ambientStrength };
-	finalShadedColor += ambientColor;
-
-	switch (m_CurrentLightingMode)
-	{
-	case dae::Renderer::LightingMode::ObservedArea:
-		finalShadedColor = ColorRGB{ cosTheta, cosTheta, cosTheta };
-		break;
-	case dae::Renderer::LightingMode::Diffuse:
-		finalShadedColor = lambertColor;
-		break;
-	case dae::Renderer::LightingMode::Specular:
-		finalShadedColor = specularColor;
-		break;
-	case dae::Renderer::LightingMode::Combined:
-		finalShadedColor = lambertColor + specularColor;
-		break;
-	}
-
-	return finalShadedColor;
 }
 
 void dae::Renderer::FillRectangle(int x0, int y0, int x1, int y1, const ColorRGB& color)
@@ -737,7 +555,21 @@ void dae::Renderer::ProcessInput()
 	if (wasF9Pressed && !isF9Pressed)
 	{
 		m_CurrentCullMode = static_cast<CullMode>((static_cast<int>(m_CurrentCullMode) + 1) % 3);
-		std::wcout << L"CULL MODE: " << std::to_wstring(static_cast<int>(m_CurrentCullMode)) << "\n";
+		std::wstring cullModeText{};
+
+		switch (m_CurrentCullMode)
+		{
+		case CullMode::None:
+			cullModeText = L"NONE";
+			break;
+		case CullMode::Back:
+			cullModeText = L"BACK";
+			break;
+		case CullMode::Front:
+			cullModeText = L"FRONT";
+			break;
+		}
+		std::wcout << L"CULL MODE: " << cullModeText << "\n";
 	}
 	wasF9Pressed = isF9Pressed;
 
