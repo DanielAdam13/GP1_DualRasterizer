@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "Effect.h"
-#include "ShadingEffect.h"
+#include "OpaqueEffect.h"
 #include "TransparencyEffect.h"
 
 #include "Texture.h"

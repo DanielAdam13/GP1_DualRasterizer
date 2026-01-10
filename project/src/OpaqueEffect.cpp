@@ -1,4 +1,4 @@
-#include "ShadingEffect.h"
+#include "OpaqueEffect.h"
 #include <iostream>
 #include <sstream> // string stream for wstringstream
 #include "Texture.h"

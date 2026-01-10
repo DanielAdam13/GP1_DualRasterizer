@@ -154,19 +154,19 @@ namespace dae
 			origin += static_cast<float>(-mouseY) * currentCameraMoveSpeedMouse * forward * deltaTime;
 		}
 		// Change the origin depending on camera.forward
-		if (pKeyboardState[SDL_SCANCODE_W])
+		if (pKeyboardState[SDL_SCANCODE_W] || pKeyboardState[SDL_SCANCODE_UP])
 		{
 			origin += currentCameraMoveSpeedKeys * forward * deltaTime;
 		}
-		if (pKeyboardState[SDL_SCANCODE_S])
+		if (pKeyboardState[SDL_SCANCODE_S] || pKeyboardState[SDL_SCANCODE_DOWN])
 		{
 			origin -= currentCameraMoveSpeedKeys * forward * deltaTime;
 		}
-		if (pKeyboardState[SDL_SCANCODE_D])
+		if (pKeyboardState[SDL_SCANCODE_D] || pKeyboardState[SDL_SCANCODE_RIGHT])
 		{
 			origin += currentCameraMoveSpeedKeys * right * deltaTime;
 		}
-		if (pKeyboardState[SDL_SCANCODE_A])
+		if (pKeyboardState[SDL_SCANCODE_A] || pKeyboardState[SDL_SCANCODE_LEFT])
 		{
 			origin -= currentCameraMoveSpeedKeys * right * deltaTime;
 		}
