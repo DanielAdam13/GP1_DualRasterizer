@@ -48,7 +48,6 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		m_IsDXInitialized = true;
 
 		CreateSamplerStates(m_pDevice);
-		CreateRasterizerStates(m_pDevice);
 
 		std::cout << "DirectX is initialized and ready!\n";
 	}
@@ -139,20 +138,6 @@ void Renderer::Update(const Timer* pTimer)
 	}
 
 	m_Camera.Update(pTimer, aspectRatio, m_CurrentRasterizerMode);
-
-	switch (m_CurrentCullMode)
-	{
-	case CullMode::None:
-		m_pCurrentRasterizer = m_pRasterizerNone;
-		break;
-	case CullMode::Back:
-		m_pCurrentRasterizer = m_pRasterizerBack;
-		break;
-	case CullMode::Front:
-		m_pCurrentRasterizer = m_pRasterizerFront;
-		break;
-	}
-	
 
 	if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
 	{
@@ -253,25 +238,22 @@ void Renderer::Render()
 }
 
 void dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, 
-	const Matrix& WVPMatrix, const Matrix& worldMatrix) const
+	const Matrix& WVPMatrix, const Matrix& worldMatrix)
 {
 	if (vertices_out.capacity() < vertices_in.size())
 	{
 		vertices_out.reserve(vertices_in.size());
 	}
 
-	//const float cameraNear{ m_Camera.nearPlane };
-	//const float cameraFar{ m_Camera.farPlane };
-
 	for (size_t i{}; i < vertices_in.size(); ++i)
 	{
-		// Model -> Clip
-		const Vector4 clipPos{ WVPMatrix.TransformPoint(Vector4(vertices_in[i].position, 1.f)) };
+		// Model -> View
+		const Vector4 viewPos{ WVPMatrix.TransformPoint(Vector4(vertices_in[i].position, 1.f)) };
 
-		const float invW{ 1.f / clipPos.w };
+		const float invW{ 1.f / viewPos.w };
 
 		// Perspective Divide
-		const Vector3 projectedPos{ Vector3(clipPos) * invW };
+		const Vector3 projectedPos{ Vector3(viewPos) * invW };
 
 		// Perspective -> Screen
 		const Vector4 screenPos{ (projectedPos.x + 1.f) * 0.5f * m_Width,
@@ -293,7 +275,7 @@ void dae::Renderer::VertexTransformationFunction(const std::vector<VertexIn>& ve
 	}
 }
 
-bool dae::Renderer::PassTriangleOptimizations(const std::array<VertexOut, 3> screenTri)
+bool dae::Renderer::PassTriangleOptimizations(const std::array<VertexOut, 3> screenTri) const
 {
 	// --- INSIDE SCREEN CHECK ---
 	if (std::any_of(screenTri.begin(), screenTri.end(),
@@ -316,7 +298,7 @@ bool dae::Renderer::PassTriangleOptimizations(const std::array<VertexOut, 3> scr
 	return true;
 }
 
-void dae::Renderer::FillRectangle(int x0, int y0, int x1, int y1, const ColorRGB& color)
+void dae::Renderer::FillRectangle(int x0, int y0, int x1, int y1, const ColorRGB& color) const
 {
 	auto drawPixel = [&](int x, int y) // Store Lambda function
 		{
@@ -362,26 +344,6 @@ void dae::Renderer::CreateSamplerStates(ID3D11Device* pDevice)
 	desc.MaxAnisotropy = 16;
 	m_pAnisotropicSampler = nullptr;
 	pDevice->CreateSamplerState(&desc, &m_pAnisotropicSampler);
-}
-
-void dae::Renderer::CreateRasterizerStates(ID3D11Device* pDevice)
-{
-	D3D11_RASTERIZER_DESC desc{};
-	desc.FillMode = D3D11_FILL_SOLID;
-	desc.FrontCounterClockwise = false; // depends on your winding order
-	desc.DepthClipEnable = true;
-
-	// Back-face culling
-	desc.CullMode = D3D11_CULL_BACK;
-	pDevice->CreateRasterizerState(&desc, &m_pRasterizerBack);
-
-	// Front-face culling
-	desc.CullMode = D3D11_CULL_FRONT;
-	pDevice->CreateRasterizerState(&desc, &m_pRasterizerFront);
-
-	// No culling
-	desc.CullMode = D3D11_CULL_NONE;
-	pDevice->CreateRasterizerState(&desc, &m_pRasterizerNone);
 }
 
 HRESULT Renderer::InitializeDirectX()

@@ -63,8 +63,8 @@ VS_OUTPUT VS(VS_INPUT input)
     output.Position = mul(float4(input.Position, 1.f), gWorldViewProj);
     output.WorldPos = mul(float4(input.Position, 1.f), gWorldMatrix);
     output.UV = input.UV;
-    output.Normal = mul(normalize(input.Normal), (float3x3) gWorldMatrix).xyz; // Transformed Normal to World
-    output.Tangent = mul(normalize(input.Tangent), (float3x3) gWorldMatrix).xyz; // Transformed Tangent to World
+    output.Normal = normalize(mul((input.Normal), (float3x3) gWorldMatrix).xyz); // Transformed Normal to World
+    output.Tangent = normalize(mul(normalize(input.Tangent), (float3x3) gWorldMatrix).xyz); // Transformed Tangent to World
     output.ViewDir = gCameraPos - output.WorldPos.xyz;
     
     return output;
@@ -97,7 +97,6 @@ float3 GetPhongColor(in VS_OUTPUT input, float3 N, float3 lightVector)
     const float shininess = 25.f / gLight1.LightIntensity;
     const float phongExponent = sampledGlossR * shininess;
     
-    //const float3 viewDirection = normalize(gCameraPos - input.WorldPos.xyz);
     const float3 viewDirection = normalize(input.ViewDir);
     
     const float3 reflectRay = reflect(-lightVector, N);
@@ -167,6 +166,14 @@ DepthStencilState gDepthStencilState
     StencilEnable = false;
 };
 
+DepthStencilState gDepthStencilStateFront
+{
+    DepthEnable = true;
+    DepthWriteMask = zero; // Set to zero so it doesn't write when culling front
+    DepthFunc = less_equal;
+    StencilEnable = false;
+};
+
 BlendState gBlendState
 {
     BlendEnable[0] = false; // NO Blending
@@ -198,7 +205,7 @@ technique11 DefaultTechnique
     pass P2
     {
         SetRasterizerState(gRasterizerStateFront);
-        SetDepthStencilState(gDepthStencilState, 0);
+        SetDepthStencilState(gDepthStencilStateFront, 0);
         SetBlendState(gBlendState, float4(0.f, 0.f, 0.f, 0.f), 0xFFFFFFFF);
         SetVertexShader(CompileShader(vs_5_0, VS()));
         SetGeometryShader(NULL);

@@ -94,7 +94,7 @@ public:
 		SAFE_RELEASE(m_pInputLayout);
 	}
 
-	void Render(RasterizerMode currentRasterizerMode, const Matrix& viewProjMatrix, Vector3& cameraPos, 
+	void Render(RasterizerMode currentRasterizerMode, const Matrix& viewProjMatrix, const Vector3& cameraPos, 
 		ID3D11DeviceContext* pDeviceContext, ID3D11SamplerState* currentSamplerState, CullMode currentCullMode)
 	{
 		// SHARED
@@ -143,7 +143,7 @@ public:
 			D3DX11_TECHNIQUE_DESC techDesc{};
 			m_pEffect->GetTechnique()->GetDesc(&techDesc);
 
-			/*int passNumber{};
+			int passNumber{};
 			if constexpr (std::is_same_v<EffectType, OpaqueEffect>)
 			{
 				passNumber = static_cast<int>(currentCullMode);
@@ -152,15 +152,15 @@ public:
 			if constexpr (std::is_same_v<EffectType, TransparencyEffect>)
 			{
 				passNumber = 0;
-			}*/
+			}
 			
-			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(0); // Technique switches passes (for cull mode)
+			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(passNumber); // Technique switches passes (for cull mode)
 			pass->Apply(0, pDeviceContext);
 
 			// ----- Bind Variables AFTER Technique pass ------
 			pDeviceContext->PSSetSamplers(0, 1, &currentSamplerState);
 
-			//m_pEffect->ApplyPipelineStates(pDeviceContext);
+			//pDeviceContext->RSSetState(currentRasterizerState);
 
 			const auto effectWorldMatrix{ m_pEffect->GetWorldMatrix() };
 			const auto effectCameraPosVector{ m_pEffect->GetCameraPos() };
@@ -169,7 +169,7 @@ public:
 				effectWorldMatrix->SetMatrix(reinterpret_cast<float*>(&m_WorldMatrix));
 
 			if (effectCameraPosVector)
-				effectCameraPosVector->SetFloatVector(reinterpret_cast<float*>(&cameraPos));
+				effectCameraPosVector->SetFloatVector(reinterpret_cast<const float*>(&cameraPos));
 
 			// ----- DRAW -----
 			pDeviceContext->DrawIndexed(m_NumIndices, 0, 0);

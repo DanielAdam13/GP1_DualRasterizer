@@ -16,8 +16,8 @@ enum class RasterizerMode
 
 enum class CullMode
 {
-	None = 0,
-	Back = 1,
+	Back = 0,
+	None = 1,
 	Front = 2
 };
 

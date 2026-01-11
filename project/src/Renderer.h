@@ -114,8 +114,11 @@ namespace dae
 								// Depth Test
 								if (pixel.position.z < m_pDepthBufferPixels[currentPixelNr])
 								{
-									// Depth Write
-									m_pDepthBufferPixels[currentPixelNr] = pixel.position.z;
+									if (m_CurrentCullMode != CullMode::Front)
+									{
+										// Depth Write
+										m_pDepthBufferPixels[currentPixelNr] = pixel.position.z;
+									}
 
 									// UV, Normal, Tangent, ViewDirection Interpolation
 									InterpolateVertex(triangleAreaRatios, screenTri, pixel);
@@ -153,9 +156,9 @@ namespace dae
 		}
 
 		void VertexTransformationFunction(const std::vector<VertexIn>& vertices_in, std::vector<VertexOut>& vertices_out, 
-			const Matrix& WVPMatrix, const Matrix& meshWorldMatrix) const;
+			const Matrix& WVPMatrix, const Matrix& meshWorldMatrix);
 
-		bool PassTriangleOptimizations(const std::array<VertexOut, 3> screenTri);
+		bool PassTriangleOptimizations(const std::array<VertexOut, 3> screenTri) const;
 
 		template <typename MeshType>
 		ColorRGB PixelShading(const VertexIn& pixel, const MeshType& mesh, const ColorRGB& pixelColor) const
@@ -174,15 +177,17 @@ namespace dae
 				// Tangent -> World
 				const Matrix tangentSpaceMatrix{ pixel.tangent, binormal, pixel.normal, {} };
 
+				// Get Normal from map
 				const ColorRGB sampledNormalColor{ mesh.GetNormalTexture()->Sample(pixel.UVCoordinate) };
 
+				// Convert Normal to Tangent space
 				const Vector3 tangentSpaceNormal{
 					sampledNormalColor.r * 2.f - 1.f,
 					sampledNormalColor.g * 2.f - 1.f,
 					sampledNormalColor.b * 2.f - 1.f
 				};
 
-				// Tangent Space to World Space
+				// Tangent Space to World Space USING the TBN matrix
 				finalNormal = tangentSpaceMatrix.TransformVector(tangentSpaceNormal).Normalized();
 			}
 
@@ -234,7 +239,7 @@ namespace dae
 			return finalShadedColor;
 		}
 
-		void FillRectangle(int x0, int y0, int x1, int y1, const ColorRGB& color);
+		void FillRectangle(int x0, int y0, int x1, int y1, const ColorRGB& color) const;
 
 		// --- HARDWARE ---
 		bool m_IsDXInitialized{ false };
