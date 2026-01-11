@@ -12,9 +12,12 @@ class Effect
 {
 public:
 	Effect() = default;
-	Effect(Effect& other) = delete;
+
 	Effect(const Effect& other) = delete;
 	Effect(Effect&& rffect) = delete;
+	Effect& operator=(const Effect&) = delete;
+	Effect& operator=(Effect&&) noexcept = delete;
+
 	virtual ~Effect() noexcept;
 
 	virtual ID3DX11Effect* GetEffect() const;

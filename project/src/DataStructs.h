@@ -15,7 +15,6 @@ namespace dae
 		Vector3 normal{};
 		Vector3 tangent{};
 		Vector3 viewDirection{}; // Only for Software
-		//ColorRGB color{}; // Only for Software
 	};
 
 	struct VertexOut

@@ -52,7 +52,7 @@ namespace dae
 		std::vector<VertexOut> m_TransformedMeshVertices{};
 
 		template <typename MeshType>
-		void RenderSoftwareMesh(const MeshType& mesh, const Matrix& viewProjMatrix)
+		inline void RenderSoftwareMesh(const MeshType& mesh, const Matrix& viewProjMatrix)
 		{
 			Matrix worldViewProjectionMatrix{ mesh.GetWorldMatrix() * viewProjMatrix };
 
@@ -62,92 +62,127 @@ namespace dae
 
 			const auto& meshIndices{ mesh.GetIndices() };
 
-			for (size_t i{}; i < meshIndices.size(); i += 3)
+			if (mesh.GetMeshPrimitiveTopology() == PrimitiveTopology::TriangleList)
 			{
-				std::array<VertexOut, 3> screenTri{ m_TransformedMeshVertices[meshIndices[i]],
-					m_TransformedMeshVertices[meshIndices[i + 1]],
-					m_TransformedMeshVertices[meshIndices[i + 2]] };
-
-				if (!PassTriangleOptimizations(screenTri))
-					continue; // Skip triangle
-
-				// ---- Bounding Box -----
-				std::pair<int, int> topLeft{ static_cast<int>(std::floor(
-					std::min({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
-					static_cast<int>(std::floor(
-						std::min({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
-				topLeft.first = std::max(topLeft.first, 0);
-				topLeft.second = std::max(topLeft.second, 0);
-
-				std::pair<int, int> bottomRight{ static_cast<int>(std::ceil(
-					std::max({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
-					static_cast<int>(std::ceil(
-						std::max({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
-				bottomRight.first = std::min(bottomRight.first, m_Width - 1);
-				bottomRight.second = std::min(bottomRight.second, m_Height - 1);
-
-				if (m_ShowBoundingBox)
+				for (size_t i{}; i < meshIndices.size(); i += 3)
 				{
-					FillRectangle(topLeft.first, topLeft.second, bottomRight.first, bottomRight.second, ColorRGB{ 1.f, 1.f, 1.f });
+					std::array<VertexOut, 3> screenTri{ m_TransformedMeshVertices[meshIndices[i]],
+						m_TransformedMeshVertices[meshIndices[i + 1]],
+						m_TransformedMeshVertices[meshIndices[i + 2]] };
+
+					if (!PassTriangleOptimizations(screenTri))
+						continue; // Skip triangle
+
+					RasterizationStage(mesh, screenTri);
 				}
-				else
+			}
+			else
+			{
+				for (size_t i = 0; i < meshIndices.size() - 2; ++i)
 				{
-					// PIXEL LOOP - Bounding Box
-					for (int px{ topLeft.first }; px <= bottomRight.first; ++px)
+					std::array<VertexOut, 3> screenTri{};
+
+					if (i & 1)
 					{
-						for (int py{ int(topLeft.second) }; py <= bottomRight.second; ++py)
+						screenTri = { m_TransformedMeshVertices[meshIndices[i]],
+						m_TransformedMeshVertices[meshIndices[i + 2]],
+						m_TransformedMeshVertices[meshIndices[i + 1]] };
+					}
+					else
+					{
+						screenTri = { m_TransformedMeshVertices[meshIndices[i]],
+						m_TransformedMeshVertices[meshIndices[i + 1]],
+						m_TransformedMeshVertices[meshIndices[i + 2]] };
+					}
+
+					if (!PassTriangleOptimizations(screenTri))
+						continue; // Skip triangle
+
+					RasterizationStage(mesh, screenTri);
+				}
+			}
+			
+		}
+
+		template <typename MeshType>
+		inline void RasterizationStage(const MeshType& mesh, const std::array<VertexOut, 3> screenTri)
+		{
+			// ---- Bounding Box -----
+			std::pair<int, int> topLeft{ static_cast<int>(std::floor(
+				std::min({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
+				static_cast<int>(std::floor(
+					std::min({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
+			topLeft.first = std::max(topLeft.first, 0);
+			topLeft.second = std::max(topLeft.second, 0);
+
+			std::pair<int, int> bottomRight{ static_cast<int>(std::ceil(
+				std::max({screenTri[0].position.x, screenTri[1].position.x, screenTri[2].position.x}))),
+				static_cast<int>(std::ceil(
+					std::max({screenTri[0].position.y, screenTri[1].position.y, screenTri[2].position.y}))) };
+			bottomRight.first = std::min(bottomRight.first, m_Width - 1);
+			bottomRight.second = std::min(bottomRight.second, m_Height - 1);
+
+			if (m_ShowBoundingBox)
+			{
+				FillRectangle(topLeft.first, topLeft.second, bottomRight.first, bottomRight.second, ColorRGB{ 1.f, 1.f, 1.f });
+			}
+			else
+			{
+				// PIXEL LOOP - Bounding Box
+				for (int px{ topLeft.first }; px <= bottomRight.first; ++px)
+				{
+					for (int py{ int(topLeft.second) }; py <= bottomRight.second; ++py)
+					{
+						ColorRGB finalColor{};
+
+						VertexIn pixel{ Vector3{ static_cast<float>(px) + 0.5f,
+							static_cast<float>(py) + 0.5f, 1.f} }; // We check from the center of the pixel, hence +0.5f
+
+						std::array<float, 3> triangleAreaRatios;
+
+						// INSIDE - OUTSIDE TEST + Depth Interpolation
+						bool pixelInTriangle{ IsPixelIn_Triangle(screenTri, pixel, triangleAreaRatios) };
+
+						if (pixelInTriangle)
 						{
-							ColorRGB finalColor{};
+							int currentPixelNr{ GetPixelNumber(px, py, m_Width) };
 
-							VertexIn pixel{ Vector3{ static_cast<float>(px) + 0.5f,
-								static_cast<float>(py) + 0.5f, 1.f} }; // We check from the center of the pixel, hence +0.5f
-
-							std::array<float, 3> triangleAreaRatios;
-
-							// INSIDE - OUTSIDE TEST + Depth Interpolation
-							bool pixelInTriangle{ IsPixelIn_Triangle(screenTri, pixel, triangleAreaRatios) };
-
-							if (pixelInTriangle)
+							// Depth Test
+							if (pixel.position.z < m_pDepthBufferPixels[currentPixelNr])
 							{
-								int currentPixelNr{ GetPixelNumber(px, py, m_Width) };
-
-								// Depth Test
-								if (pixel.position.z < m_pDepthBufferPixels[currentPixelNr])
+								if (m_CurrentCullMode != CullMode::Front)
 								{
-									if (m_CurrentCullMode != CullMode::Front)
-									{
-										// Depth Write
-										m_pDepthBufferPixels[currentPixelNr] = pixel.position.z;
-									}
-
-									// UV, Normal, Tangent, ViewDirection Interpolation
-									InterpolateVertex(triangleAreaRatios, screenTri, pixel);
-
-									ColorRGB pixelColor{ mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate) };
-
-									// ----- SHADING -----
-									pixelColor = PixelShading(pixel, mesh, pixelColor);
-
-									switch (m_CurrentPixelColorState)
-									{
-									case dae::Renderer::PixelColorState::FinalColor:
-										finalColor = pixelColor;
-										break;
-									case dae::Renderer::PixelColorState::DepthBuffer:
-										ColorRGB depthValue{ RemapValue(pixel.position.z, 0.997f) };
-										finalColor = depthValue;
-										break;
-									}
-
-									// ---- Render only if overwriting pixel ----
-									//Update Color in Buffer
-									finalColor.MaxToOne();
-
-									m_pBackBufferPixels[currentPixelNr] = SDL_MapRGB(m_pBackBuffer->format,
-										static_cast<uint8_t>(finalColor.r * 255),
-										static_cast<uint8_t>(finalColor.g * 255),
-										static_cast<uint8_t>(finalColor.b * 255));
+									// Depth Write
+									m_pDepthBufferPixels[currentPixelNr] = pixel.position.z;
 								}
+
+								// UV, Normal, Tangent, ViewDirection Interpolation
+								InterpolateVertex(triangleAreaRatios, screenTri, pixel);
+
+								ColorRGB pixelColor{ mesh.GetDiffuseTexture()->Sample(pixel.UVCoordinate) };
+
+								// ----- SHADING -----
+								pixelColor = PixelShading(pixel, mesh, pixelColor);
+
+								switch (m_CurrentPixelColorState)
+								{
+								case dae::Renderer::PixelColorState::FinalColor:
+									finalColor = pixelColor;
+									break;
+								case dae::Renderer::PixelColorState::DepthBuffer:
+									ColorRGB depthValue{ RemapValue(pixel.position.z, 0.997f) };
+									finalColor = depthValue;
+									break;
+								}
+
+								// ---- Render only if overwriting pixel ----
+								//Update Color in Buffer
+								finalColor.MaxToOne();
+
+								m_pBackBufferPixels[currentPixelNr] = SDL_MapRGB(m_pBackBuffer->format,
+									static_cast<uint8_t>(finalColor.r * 255),
+									static_cast<uint8_t>(finalColor.g * 255),
+									static_cast<uint8_t>(finalColor.b * 255));
 							}
 						}
 					}
@@ -161,7 +196,7 @@ namespace dae
 		bool PassTriangleOptimizations(const std::array<VertexOut, 3> screenTri) const;
 
 		template <typename MeshType>
-		ColorRGB PixelShading(const VertexIn& pixel, const MeshType& mesh, const ColorRGB& pixelColor) const
+		inline ColorRGB PixelShading(const VertexIn& pixel, const MeshType& mesh, const ColorRGB& pixelColor) const
 		{
 			ColorRGB finalShadedColor{};
 			const Vector3 lightDirection{ -Vector3{0.577f, -0.577f, 0.577f}.Normalized() }; // Inverted Light
@@ -244,9 +279,6 @@ namespace dae
 		// --- HARDWARE ---
 		bool m_IsDXInitialized{ false };
 
-		std::unique_ptr<OpaqueEffect> m_pOpaqueEffect;
-		std::unique_ptr<TransparencyEffect> m_pTransparencyEffect;
-
 		ID3D11SamplerState* m_pPointSampler{};
 		ID3D11SamplerState* m_pLinearSampler{};
 		ID3D11SamplerState* m_pAnisotropicSampler{};
@@ -258,9 +290,8 @@ namespace dae
 		ID3D11RasterizerState* m_pCurrentRasterizer{};
 
 		void CreateSamplerStates(ID3D11Device* pDevice);
-		void CreateRasterizerStates(ID3D11Device* pDevice);
 
-		//DIRECTX
+		// DIRECTX
 		HRESULT InitializeDirectX();
 		ID3D11Device* m_pDevice{};
 		ID3D11DeviceContext* m_pDeviceContext{};

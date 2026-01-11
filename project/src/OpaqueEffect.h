@@ -5,10 +5,13 @@ class OpaqueEffect final : public Effect
 {
 public:
 	explicit OpaqueEffect(ID3D11Device* pDevice);
-	OpaqueEffect(OpaqueEffect& other) = delete;
+
 	OpaqueEffect(const OpaqueEffect& other) = delete;
 	OpaqueEffect(OpaqueEffect&& effect) = delete;
-	virtual ~OpaqueEffect() noexcept;
+	OpaqueEffect& operator=(const OpaqueEffect&) = delete;
+	OpaqueEffect& operator=(OpaqueEffect&&) noexcept = delete;
+
+	virtual ~OpaqueEffect() noexcept override;
 	
 	virtual ID3DX11EffectMatrixVariable* GetWorldMatrix() const override;
 	virtual ID3DX11EffectVectorVariable* GetCameraPos() const override;

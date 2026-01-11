@@ -55,6 +55,11 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	{
 		std::cout << "DirectX initialization failed!\n";
 	}
+	
+	std::wcout << L"\n[Key Bindings - SHARED] \n [F1]  Toggle Rasterizer Mode(HARDWARE / SOFTWARE) \n [F2]  Toggle Vehicle Rotation(ON / OFF) \n [F9]  Cycle CullMode(BACK / FRONT / NONE) \n";
+	std::wcout << L" [F10] Toggle Uniform ClearColor(ON / OFF) \n [F11] Toggle Print FPS(ON / OFF) \n\n[Key Bindings - HARDWARE] \n [F3] Toggle FireFX(ON / OFF) \n";
+	std::wcout << L" [F4] Cycle Sampler State(POINT / LINEAR / ANISOTROPIC) \n\n[Key Bindings - SOFTWARE] \n [F5] Cycle Shading Mode(COMBINED / OBSERVED_AREA / DIFFUSE / SPECULAR) \n";
+	std::wcout << L" [F6] Toggle NormalMap(ON / OFF)\n [F7] Toggle DepthBuffer Visualization(ON / OFF) \n [F8] Toggle BoundingBox Visualization(ON / OFF)\n\n";
 
 
 	m_Camera.Initialize(45.f, { 0.f, 0.f, 0.f }, 0.1f, 100.f);
@@ -79,11 +84,6 @@ Renderer::Renderer(SDL_Window* pWindow) :
 		PrimitiveTopology::TriangleList,
 		"resources/fireFX_diffuse.png"));
 	m_TransparentMeshes[0]->Translate({ 0.f, 0.f, 50.f });
-
-	std::wcout << L"\n[Key Bindings - SHARED] \n [F1]  Toggle Rasterizer Mode(HARDWARE / SOFTWARE) \n [F2]  Toggle Vehicle Rotation(ON / OFF) \n [F9]  Cycle CullMode(BACK / FRONT / NONE) \n";
-	std::wcout << L" [F10] Toggle Uniform ClearColor(ON / OFF) \n [F11] Toggle Print FPS(ON / OFF) \n\n[Key Bindings - HARDWARE] \n [F3] Toggle FireFX(ON / OFF) \n";
-	std::wcout << L" [F4] Cycle Sampler State(POINT / LINEAR / ANISOTROPIC) \n\n[Key Bindings - SOFTWARE] \n [F5] Cycle Shading Mode(COMBINED / OBSERVED_AREA / DIFFUSE / SPECULAR) \n";
-	std::wcout << L" [F6] Toggle NormalMap(ON / OFF)\n [F7] Toggle DepthBuffer Visualization(ON / OFF) \n [F8] Toggle BoundingBox Visualization(ON / OFF)\n\n";
 }
 
 Renderer::~Renderer()
@@ -166,8 +166,8 @@ void Renderer::Render()
 	// ------- START OF FRAME --------
 	if (m_CurrentRasterizerMode == RasterizerMode::Hardware)
 	{
-		constexpr float hardwareColor[4] = { 0.39f, 0.59f, 0.93f, 1.f };
-		constexpr float uniformHardwareClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.f };
+		constexpr float hardwareColor[3] = { 0.39f, 0.59f, 0.93f };
+		constexpr float uniformHardwareClearColor[3] = { 0.1f, 0.1f, 0.1f };
 		const float* currentHardwareBackgroundColor{ m_UniformClearColorActive ? uniformHardwareClearColor : hardwareColor };
 
 		// Clear Views at the start of each Frame
@@ -214,11 +214,6 @@ void Renderer::Render()
 		for (auto& pTrMesh : m_TransparentMeshes)
 		{
 			pTrMesh->Render(RasterizerMode::Hardware, viewProjMatrix, m_Camera.origin, m_pDeviceContext, m_CurrentSampler, m_CurrentCullMode);
-
-			/*if (m_CurrentRasterizerMode == RasterizerMode::Software)
-			{
-				RenderSoftwareMesh(*pTrMesh, viewProjMatrix);
-			}*/
 		}
 	}
 

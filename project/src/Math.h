@@ -115,7 +115,7 @@ inline void InterpolateVertex(const std::array<float, 3>& areaRatios, const std:
 		 areaRatios[2] * screenTriangle[1].viewDirection };
 	pixel.viewDirection = viewDirectionValue;
 
-	pixel.viewDirection.Normalize();
+	pixel.viewDirection; // Normalizing later when needed (Phong)
 }
 
 inline int GetPixelNumber(int px, int py, int screenWidth)

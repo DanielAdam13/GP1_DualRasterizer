@@ -60,11 +60,11 @@ public:
 		m_pNormalTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, normalTexturePath)) },
 		m_pSpecularTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, specularTexturePath)) },
 		m_pGlossTexture{ std::unique_ptr<Texture>(Texture::LoadFromFile(pDevice, glossTexturePath)) }
-		{
-			Utils::ParseOBJ(mainBodyMeshOBJ, m_Vertices, m_Indices);
-			m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
-			CreateLayouts(pDevice);
-		};
+	{
+		Utils::ParseOBJ(mainBodyMeshOBJ, m_Vertices, m_Indices);
+		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
+		CreateLayouts(pDevice);
+	};
 
 	Mesh(ID3D11Device* pDevice, const std::vector<VertexIn>& vertices, const std::vector<uint32_t>& indices, PrimitiveTopology _primitive,
 		const std::string& diffuseTexturePath, const std::string& normalTexturePath = "", const std::string& specularTexturePath = "", const std::string& glossTexturePath = "")
@@ -94,7 +94,12 @@ public:
 		SAFE_RELEASE(m_pInputLayout);
 	}
 
-	void Render(RasterizerMode currentRasterizerMode, const Matrix& viewProjMatrix, const Vector3& cameraPos, 
+	Mesh(const Mesh& other) = delete;
+	Mesh(Mesh&& effect) = delete;
+    Mesh& operator=(const  Mesh&) = delete;
+	Mesh& operator=(Mesh&&) noexcept = delete;
+
+	void Render(RasterizerMode currentRasterizerMode, const Matrix& viewProjMatrix, const Vector3& cameraPos,
 		ID3D11DeviceContext* pDeviceContext, ID3D11SamplerState* currentSamplerState, CullMode currentCullMode)
 	{
 		// SHARED
@@ -153,7 +158,7 @@ public:
 			{
 				passNumber = 0;
 			}
-			
+
 			ID3DX11EffectPass* pass = m_pEffect->GetTechnique()->GetPassByIndex(passNumber); // Technique switches passes (for cull mode)
 			pass->Apply(0, pDeviceContext);
 
@@ -192,17 +197,17 @@ public:
 	};
 
 	// Getters
-	Matrix GetWorldMatrix() const 
+	Matrix GetWorldMatrix() const
 	{
 		return m_WorldMatrix;
 	};
 
-	const std::vector<VertexIn>& GetVertices() const 
+	const std::vector<VertexIn>& GetVertices() const
 	{
 		return m_Vertices;
 	}
 
-	const std::vector<uint32_t>& GetIndices() const 
+	const std::vector<uint32_t>& GetIndices() const
 	{
 		return m_Indices;
 	}
@@ -222,15 +227,20 @@ public:
 		return m_pSpecularTexture.get();
 	};
 
-	const Texture* GetGlossTexture() const 
+	const Texture* GetGlossTexture() const
 	{
 		return m_pGlossTexture.get();
+	};
+
+	const PrimitiveTopology GetMeshPrimitiveTopology() const
+	{
+		return m_CurrentTopology;
 	};
 
 private:
 	// Mesh Members
 	// --- HARDWARE ---
-	std::unique_ptr<EffectType> m_pEffect;
+	const std::unique_ptr<EffectType> m_pEffect;
 
 	// --- SHARED ---
 	std::vector<VertexIn> m_Vertices;
