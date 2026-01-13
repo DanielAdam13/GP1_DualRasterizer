@@ -18,7 +18,7 @@ using namespace dae;
 
 Renderer::Renderer(SDL_Window* pWindow) :
 	m_pWindow(pWindow),
-	m_RotationFrozen{ true },
+	m_RotationFrozen{ false },
 	m_CurrentRasterizerMode{ RasterizerMode::Hardware },
 	m_UniformClearColorActive{ false },
 	m_CurrentCullMode{ CullMode::Back },

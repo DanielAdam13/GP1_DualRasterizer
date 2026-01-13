@@ -15,7 +15,7 @@ Texture::Texture(SDL_Surface * pSurface) :
 {
 }
 
-Texture::~Texture()
+Texture::~Texture() noexcept
 {
 	SAFE_RELEASE(m_pSRV);
 	SAFE_RELEASE(m_pResourceTexture);
@@ -90,7 +90,7 @@ Texture* Texture::LoadFromFile(ID3D11Device* device, const std::string& filePath
 	return newTexture;
 }
 
-ID3D11ShaderResourceView* Texture::GetSRV() const
+ID3D11ShaderResourceView* Texture::GetSRV() const noexcept
 {
 	return m_pSRV;
 }
@@ -106,5 +106,5 @@ ColorRGB Texture::Sample(const Vector2& uv) const
 	uint8_t r, g, b;
 	SDL_GetRGB(pixel, m_pSurface->format, &r, &g, &b);
 
-	return ColorRGB(r / 255.f, g / 255.f, b / 255.f);
+	return ColorRGB{ r / 255.f, g / 255.f, b / 255.f };
 }

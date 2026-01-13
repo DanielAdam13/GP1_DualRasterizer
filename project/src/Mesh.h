@@ -87,7 +87,7 @@ public:
 		m_WorldMatrix = m_ScaleMatrix * m_RotationMatrix * m_TranslationMatrix;
 		CreateLayouts(pDevice);
 	};
-	~Mesh()
+	~Mesh() noexcept
 	{
 		SAFE_RELEASE(m_pVertexBuffer);
 		SAFE_RELEASE(m_pIndexBuffer);
@@ -202,37 +202,37 @@ public:
 		return m_WorldMatrix;
 	};
 
-	const std::vector<VertexIn>& GetVertices() const
+	const std::vector<VertexIn>& GetVertices() const noexcept
 	{
 		return m_Vertices;
 	}
 
-	const std::vector<uint32_t>& GetIndices() const
+	const std::vector<uint32_t>& GetIndices() const noexcept
 	{
 		return m_Indices;
 	}
 
-	const Texture* GetDiffuseTexture() const
+	const Texture* GetDiffuseTexture() const noexcept
 	{
 		return m_pDiffuseTexture.get();
 	};
 
-	const Texture* GetNormalTexture() const
+	const Texture* GetNormalTexture() const noexcept
 	{
 		return m_pNormalTexture.get();
 	};
 
-	const Texture* GetSpecularTexture() const
+	const Texture* GetSpecularTexture() const noexcept
 	{
 		return m_pSpecularTexture.get();
 	};
 
-	const Texture* GetGlossTexture() const
+	const Texture* GetGlossTexture() const noexcept
 	{
 		return m_pGlossTexture.get();
 	};
 
-	const PrimitiveTopology GetMeshPrimitiveTopology() const
+	const PrimitiveTopology GetMeshPrimitiveTopology() const noexcept
 	{
 		return m_CurrentTopology;
 	};

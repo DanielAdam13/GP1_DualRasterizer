@@ -15,10 +15,10 @@ using namespace dae;
 class Texture final
 {
 public:
-	~Texture();
+	~Texture() noexcept;
 	static Texture* LoadFromFile(ID3D11Device* device, const std::string& filePath);
 
-	ID3D11ShaderResourceView* GetSRV() const;
+	ID3D11ShaderResourceView* GetSRV() const noexcept;
 
 	// --- SOFTWARE ---
 	ColorRGB Sample(const Vector2& uv) const;
